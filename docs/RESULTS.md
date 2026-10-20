@@ -15,7 +15,18 @@
 
 ## 배포
 
-대상 원격 저장소는 공개 저장소이며 초기 조회에서 `has_pages: false`였습니다. GitHub Pages를 사용하려면 저장소 Settings → Pages → Source를 GitHub Actions로 설정해야 합니다. 현재 환경에는 연결된 GitHub 브라우저/설정 관리 API가 없어 이 설정을 직접 변경할 수 없습니다. Git push와 Actions 실행 결과는 후속 검증 기록을 따릅니다.
+공개 주소: https://oyueo-mm.github.io/NeuralCanvas/
+
+최초 구현 커밋 `a08f823`을 main에 일반 push했습니다. [Actions 실행](https://github.com/oyueo-mm/NeuralCanvas/actions/runs/39443004252)에서 build와 deploy가 모두 성공했습니다. 타입 검사·단위 테스트·프로덕션 빌드·Chromium/모바일/WebKit 브라우저 검증을 모두 통과한 아티팩트를 배포했습니다. 원격 저장소의 Pages는 사용자가 GitHub Actions Source로 활성화했고 API에서 `has_pages: true`를 확인했습니다.
+
+## 실제 공개 URL 검증
+
+- 로컬 검증과 별도로 공개 URL에서 Playwright 9개 테스트 통과, 0 실패(37.7초).
+- 데이터 추가·이동·삭제, 프리셋, 뉴런·층 수정, 가중치·편향·활성화 수정, 연결 비활성 유지, 실제 Worker 학습·재개, 예측 갱신, 입력 순회, 저장·복원, PNG 다운로드 확인.
+- `scripts/verify-deployment.mjs`로 최초 페이지 로딩부터 별도 관찰: HTML·JS·CSS·Worker 모두 HTTP 200. 콘솔 error·pageerror·실패한 요청·HTTP 400 이상 응답 모두 0건.
+- 데스크톱·모바일 가로 넘침 검사 통과. Firefox는 미검증입니다.
+
+`NEURALCANVAS_URL=https://oyueo-mm.github.io/NeuralCanvas/ npm run test:e2e` 또는 PowerShell에서 `$env:NEURALCANVAS_URL='https://oyueo-mm.github.io/NeuralCanvas/'; npm run test:e2e`로 공개 배포를 다시 검증할 수 있습니다. `node scripts/verify-deployment.mjs`는 정적 파일·Worker·콘솔을 검사합니다.
 
 미구현: 터치 핀치, 선택 뉴런 중심 확대, 활성화 곡선 그래프, 가중치 히스토그램, 입력 정규화, Adam 상태를 포함한 체크포인트, Firefox 검증. 2차원 분류·결정 경계·CNN은 첫 버전 범위 밖입니다.
 

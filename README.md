@@ -4,7 +4,7 @@
 
 1차원 회귀를 위한 브라우저 실험실입니다. TypeScript로 직접 구현한 MLP가 실제 순전파·역전파와 SGD/Adam 업데이트를 수행합니다. 예측 곡선, 연결선, 활성화 값과 손실 이력은 실제 모델에서 계산합니다.
 
-목표 공개 주소: https://oyueo-mm.github.io/NeuralCanvas/ (배포 상태는 [개발 결과](docs/RESULTS.md) 참조)
+**Live Demo: https://oyueo-mm.github.io/NeuralCanvas/** — 실제 배포 및 공개 URL의 브라우저 검증 완료. 자세한 결과는 [개발 결과](docs/RESULTS.md)를 참고하세요.
 
 ![NeuralCanvas 실제 브라우저 실행 화면](docs/images/lab.png)
 

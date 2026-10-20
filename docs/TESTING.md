@@ -30,3 +30,5 @@ SGD 수치 예: w=b=0, x=2, y=1, η=.1 → w=.4, b=.2. Adam 고정 기울기 2�
 `tests/lab.spec.ts`는 프로덕션 빌드와 실제 Worker를 사용합니다. Chromium 데스크톱·iPhone 13 크기 Chromium·WebKit을 대상으로 점 추가/드래그/삭제, 프리셋, 층·뉴런 추가/삭제, 활성화 변경, 가중치·편향 수정, 연결 비활성, 한 배치, 학습/일시정지/재개, 손실·곡선 갱신, 순회 중 가중치 고정, 확대, 실험 다운로드/복원, CSV 및 빈 데이터 상태를 검증합니다. localStorage에서 실제 모델 배열도 검사합니다.
 
 최종 로컬 실행에서 9개 테스트가 모두 통과했습니다. PNG 2종의 실제 다운로드 파일도 검증합니다. 브라우저 결과와 발견·수정 사항은 [RESULTS.md](RESULTS.md)에 기록합니다. 스크린샷·trace는 `test-results/`에 남고 대표 스크린샷 외에는 Git에서 제외합니다. Firefox는 현재 검증하지 않았습니다.
+
+공개 GitHub Pages URL에서도 별도로 9개 테스트를 실행해 모두 통과했습니다. `NEURALCANVAS_URL` 환경변수가 있으면 로컬 서버를 시작하지 않고 해당 URL을 사용합니다. `scripts/verify-deployment.mjs`는 최초 로딩 시점부터 console error·pageerror·HTTP 오류·실패 요청을 수집하며, Worker 생성과 HTTP 200을 확인하고 실제 한 배치 학습·입력 순회도 실행합니다.
