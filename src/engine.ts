@@ -1,5 +1,11 @@
 export type Activation = "linear" | "tanh" | "sigmoid" | "relu" | "leakyRelu";
-export type Point = { x: number; y: number };
+export type Task = "regression" | "classification";
+export type Point = { x: number; y: number; label?: 0 | 1 };
+export type ClassDefinition = { id: 0 | 1; name: string; color: string };
+export const classes = [
+  { id: 0, name: "클래스 0", color: "#2563eb" },
+  { id: 1, name: "클래스 1", color: "#e35b36" },
+] as const;
 export type Layer = {
   id: string;
   neurons: string[];
@@ -9,6 +15,7 @@ export type Layer = {
   enabled: boolean[][];
 };
 export type Model = {
+  task?: Task;
   layers: Layer[];
   seed: number;
   init: "xavier" | "he" | "zero";
@@ -84,16 +91,22 @@ export function createModel(
   activation: Activation = "tanh",
   seed = 42,
   init: Model["init"] = "xavier",
+  task: Task = "regression",
 ): Model {
   const random = rng(seed);
-  let previous = 1;
+  let previous = task === "classification" ? 2 : 1;
   const layers = [...sizes, 1].map((n, l) => {
     const scale =
       init === "he" ? Math.sqrt(2 / previous) : Math.sqrt(2 / (previous + n));
     const layer: Layer = {
       id: `layer-${l}`,
       neurons: Array.from({ length: n }, (_, j) => `l${l}n${j}`),
-      activation: l === sizes.length ? "linear" : activation,
+      activation:
+        l === sizes.length
+          ? task === "classification"
+            ? "sigmoid"
+            : "linear"
+          : activation,
       w: Array.from({ length: n }, () =>
         Array.from({ length: previous }, () =>
           init === "zero"
@@ -109,13 +122,16 @@ export function createModel(
     previous = n;
     return layer;
   });
-  return { layers, seed, init };
+  return { layers, seed, init, ...(task === "classification" ? { task } : {}) };
 }
 export function resizeModel(model: Model, sizes: number[], acts: Activation[]) {
-  const next = createModel(sizes, "tanh", model.seed, model.init);
+  const next = createModel(sizes, "tanh", model.seed, model.init, model.task);
   // Preserve edges only when source and destination layer identities are unchanged.
   next.layers.forEach((layer, l) => {
-    layer.activation = acts[l] ?? "linear";
+    layer.activation =
+      model.task === "classification" && l === next.layers.length - 1
+        ? "sigmoid"
+        : (acts[l] ?? "linear");
     const old = model.layers[l];
     if (!old || model.layers.length !== next.layers.length) return;
     layer.w.forEach((row, j) => {
@@ -130,8 +146,10 @@ export function resizeModel(model: Model, sizes: number[], acts: Activation[]) {
   });
   return next;
 }
-export function forward(m: Model, x: number) {
-  const a: number[][] = [[x]],
+export function forward(m: Model, x: number | number[]) {
+  const a: number[][] = [
+      Array.isArray(x) ? x : m.task === "classification" ? [x, 0] : [x],
+    ],
     z: number[][] = [];
   m.layers.forEach((l, k) => {
     const sums = l.w.map((row, j) =>
@@ -144,21 +162,59 @@ export function forward(m: Model, x: number) {
 }
 export function loss(m: Model, data: Point[]) {
   return data.length
-    ? data.reduce((s, p) => s + (forward(m, p.x).y - p.y) ** 2, 0) / data.length
+    ? data.reduce((s, p) => {
+        const f = forward(m, m.task === "classification" ? [p.x, p.y] : p.x);
+        return (
+          s +
+          (m.task === "classification"
+            ? binaryCrossEntropy(f.z.at(-1)![0], p.label!)
+            : (f.y - p.y) ** 2)
+        );
+      }, 0) / data.length
     : 0;
+}
+// BCE from logits stays finite even when sigmoid rounds to zero or one.
+export function binaryCrossEntropy(logit: number, target: number) {
+  return (
+    Math.max(logit, 0) - logit * target + Math.log1p(Math.exp(-Math.abs(logit)))
+  );
+}
+export function accuracy(m: Model, data: Point[]) {
+  return data.length
+    ? data.filter((p) => Number(forward(m, [p.x, p.y]).y >= 0.5) === p.label)
+        .length / data.length
+    : undefined;
+}
+export function confusionMatrix(m: Model, data: Point[]) {
+  const matrix = [
+    [0, 0],
+    [0, 0],
+  ];
+  data.forEach(
+    (p) => matrix[p.label!][Number(forward(m, [p.x, p.y]).y >= 0.5)]++,
+  );
+  return matrix;
 }
 export function gradients(m: Model, data: Point[]) {
   const w = m.layers.map((l) => l.w.map((row) => row.map(() => 0))),
     b = m.layers.map((l) => l.b.map(() => 0));
   const dz = m.layers.map((l) => l.b.map(() => 0));
   for (const p of data) {
-    const f = forward(m, p.x);
-    let da = [(2 * (f.y - p.y)) / data.length];
+    const classification = m.task === "classification";
+    const f = forward(m, classification ? [p.x, p.y] : p.x);
+    let da = [
+      ((classification ? 1 : 2) * (f.y - (classification ? p.label! : p.y))) /
+        data.length,
+    ];
     for (let l = m.layers.length - 1; l >= 0; l--) {
       const layer = m.layers[l],
         prev = f.a[l].map(() => 0);
       layer.w.forEach((row, j) => {
-        const d = da[j] * derivative(f.z[l][j], layer.activation);
+        const d =
+          da[j] *
+          (classification && l === m.layers.length - 1
+            ? 1
+            : derivative(f.z[l][j], layer.activation));
         b[l][j] += d;
         dz[l][j] += d;
         row.forEach((v, i) => {
@@ -247,7 +303,10 @@ export function dataset(
     return { x, y: y + (random() - 0.5) * 2 * noise };
   });
 }
-export function validatePoints(value: unknown): Point[] {
+export function validatePoints(
+  value: unknown,
+  task: Task = "regression",
+): Point[] {
   if (!Array.isArray(value) || value.length > 2000)
     throw Error("데이터는 최대 2,000개의 좌표 배열이어야 합니다.");
   return value.map((p) => {
@@ -261,20 +320,85 @@ export function validatePoints(value: unknown): Point[] {
       Math.abs(p.y) > 1000
     )
       throw Error("x, y는 -1000~1000 범위의 유한한 숫자여야 합니다.");
-    return { x: p.x, y: p.y };
+    if (task === "classification" && p.label !== 0 && p.label !== 1)
+      throw Error("분류 데이터의 label은 0 또는 1이어야 합니다.");
+    return {
+      x: p.x,
+      y: p.y,
+      ...(task === "classification" ? { label: p.label } : {}),
+    };
   });
 }
-export function parseCSV(text: string) {
+export function parseCSV(text: string, task: Task = "regression") {
   const rows = text.trim().split(/\r?\n/);
-  if (/^\s*x\s*,\s*y\s*$/i.test(rows[0])) rows.shift();
+  if (/^\s*x\s*,\s*y\s*(,\s*label\s*)?$/i.test(rows[0])) rows.shift();
   return validatePoints(
     rows
       .filter((r) => r.trim())
       .map((row) => {
         const cells = row.split(",");
-        if (cells.length !== 2 || cells.some((c) => !c.trim()))
-          throw Error("CSV는 x,y 두 열이어야 합니다.");
-        return { x: Number(cells[0]), y: Number(cells[1]) };
+        if (
+          cells.length !== (task === "classification" ? 3 : 2) ||
+          cells.some((c) => !c.trim())
+        )
+          throw Error(
+            task === "classification"
+              ? "분류 CSV는 x,y,label 세 열이어야 합니다."
+              : "CSV는 x,y 두 열이어야 합니다.",
+          );
+        return {
+          x: Number(cells[0]),
+          y: Number(cells[1]),
+          ...(task === "classification" ? { label: Number(cells[2]) } : {}),
+        };
       }),
+    task,
   );
+}
+
+export const classificationPresets = [
+  "XOR",
+  "Two moons",
+  "Concentric circles",
+  "Gaussian blobs",
+  "Spiral",
+] as const;
+export function classificationDataset(
+  kind: string,
+  count = 100,
+  noise = 0.12,
+  seed = 42,
+): Point[] {
+  const random = rng(seed);
+  const normal = () =>
+    Math.sqrt(-2 * Math.log(Math.max(random(), 1e-12))) *
+    Math.cos(2 * Math.PI * random());
+  return Array.from({ length: count }, (_, i) => {
+    let label = (i % 2) as 0 | 1,
+      x: number,
+      y: number;
+    if (kind === "XOR") {
+      x = (random() * 2 - 1) * 3;
+      y = (random() * 2 - 1) * 3;
+      label = Number(x * y >= 0) as 0 | 1;
+    } else if (kind === "Two moons") {
+      const t = random() * Math.PI;
+      x = 2.2 * (label ? 1 - Math.cos(t) : Math.cos(t)) - 1.1;
+      y = 2.2 * (label ? 0.5 - Math.sin(t) : Math.sin(t)) - 0.55;
+    } else if (kind === "Concentric circles") {
+      const t = random() * 2 * Math.PI,
+        r = label ? 2.8 : 1.2;
+      x = r * Math.cos(t);
+      y = r * Math.sin(t);
+    } else if (kind === "Spiral") {
+      const r = 0.3 + 3 * (i / Math.max(1, count - 1)),
+        t = r * 2.4 + label * Math.PI;
+      x = r * Math.cos(t);
+      y = r * Math.sin(t);
+    } else {
+      x = (label ? 1.6 : -1.6) + normal() * 0.65;
+      y = (label ? 1 : -1) + normal() * 0.65;
+    }
+    return { x: x + normal() * noise, y: y + normal() * noise, label };
+  });
 }

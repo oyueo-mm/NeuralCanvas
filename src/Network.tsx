@@ -16,6 +16,7 @@ export type Selection =
 export const Network = memo(function Network({
   model,
   input,
+  input2,
   selection,
   select,
   gradient,
@@ -26,6 +27,7 @@ export const Network = memo(function Network({
 }: {
   model: Model;
   input: number;
+  input2: number;
   selection: Selection;
   select: (s: Selection) => void;
   gradient?: Gradients;
@@ -51,15 +53,26 @@ export const Network = memo(function Network({
       mid: { x: number; y: number };
       view: typeof view;
     } | null>(null);
-  const f = useMemo(() => forward(model, input), [model, input]),
-    sizes = [1, ...model.layers.map((l) => l.b.length)],
-    radius = Math.max(10, Math.min(20, (H - 110) / Math.max(...sizes) / 2.3));
+  const f = useMemo(
+      () =>
+        forward(
+          model,
+          model.task === "classification" ? [input, input2] : input,
+        ),
+      [model, input, input2],
+    ),
+    sizes = [
+      model.task === "classification" ? 2 : 1,
+      ...model.layers.map((l) => l.b.length),
+    ],
+    worldW = Math.max(W, (sizes.length - 1) * 150 + 100),
+    worldH = Math.max(H, (Math.max(...sizes) - 1) * 60 + 120),
+    fitScale = Math.min(W / worldW, H / worldH),
+    radius = 20,
+    showValues = fitScale * view.zoom >= 0.8;
   const pos = (l: number, j: number) => ({
-    x: 40 + (l * (W - 80)) / (sizes.length - 1),
-    y:
-      H / 2 +
-      (j - (sizes[l] - 1) / 2) *
-        Math.min(56, (H - 110) / Math.max(1, Math.max(...sizes) - 1)),
+    x: 50 + (l * (worldW - 100)) / (sizes.length - 1),
+    y: worldH / 2 + (j - (sizes[l] - 1) / 2) * 60,
   });
   const local = (e: PointerEvent<SVGSVGElement>) => {
     const p = e.currentTarget.createSVGPoint();
@@ -206,6 +219,8 @@ export const Network = memo(function Network({
           }}
           data-testid="network"
           data-zoom={view.zoom}
+          data-world-height={worldH}
+          data-node-spacing="60"
           viewBox={`0 0 ${W} ${H}`}
           aria-label="신경망 구조"
           onWheel={(e) => zoom(e.deltaY > 0 ? 0.9 : 1.1)}
@@ -220,7 +235,7 @@ export const Network = memo(function Network({
         >
           <rect width={W} height={H} fill="#fff" pointerEvents="none" />
           <g
-            transform={`translate(${W / 2 + view.x} ${H / 2 + view.y}) scale(${view.zoom}) translate(${-W / 2} ${-H / 2})`}
+            transform={`translate(${W / 2 + view.x} ${H / 2 + view.y}) scale(${view.zoom * fitScale}) translate(${-worldW / 2} ${-worldH / 2})`}
             data-testid="network-transform"
           >
             {model.layers.map((layer, l) =>
@@ -327,7 +342,7 @@ export const Network = memo(function Network({
                       <title>
                         {l
                           ? `가중합 ${f.z[l - 1][j].toFixed(5)} · 활성화 ${a.toFixed(5)} · 편향 ${model.layers[l - 1].b[j].toFixed(5)}`
-                          : `입력 ${input.toFixed(5)}`}
+                          : `입력 ${f.a[0][j].toFixed(5)}`}
                       </title>
                       <circle
                         cx={p.x}
@@ -363,20 +378,35 @@ export const Network = memo(function Network({
                         textAnchor="middle"
                         fontFamily="ui-monospace,monospace"
                         pointerEvents="none"
+                        visibility={
+                          fitScale * view.zoom < 0.5 && !chosen
+                            ? "hidden"
+                            : "visible"
+                        }
                       >
-                        {a.toFixed(2)}
+                        {l === 0
+                          ? model.task === "classification"
+                            ? `x${j + 1}`
+                            : "x"
+                          : chosen && showValues
+                            ? a.toFixed(2)
+                            : `${j + 1}`}
                       </text>
                     </g>
                   );
                 })}
                 <text
                   x={pos(l, 0).x}
-                  y={H - 13}
+                  y={worldH - 20}
                   fill="#64748b"
                   fontSize="11"
                   textAnchor="middle"
                 >
-                  {l === 0 ? "x" : model.layers[l - 1].activation}
+                  {l === 0
+                    ? model.task === "classification"
+                      ? "x₁, x₂"
+                      : "x"
+                    : model.layers[l - 1].activation}
                 </text>
               </g>
             ))}

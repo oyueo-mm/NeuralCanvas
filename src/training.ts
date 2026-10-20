@@ -7,6 +7,7 @@ import {
   loss,
   rng,
   shuffle,
+  accuracy,
 } from "./engine";
 export class Trainer {
   optimizer = new Optimizer();
@@ -55,6 +56,17 @@ export class Trainer {
       throw Error(
         "학습이 발산했습니다. 학습률을 낮추거나 모델을 초기화하세요.",
       );
-    return { epoch: this.epoch, step: this.step, train, validation };
+    return {
+      epoch: this.epoch,
+      step: this.step,
+      train,
+      validation,
+      ...(this.model.task === "classification"
+        ? {
+            accuracy: accuracy(this.model, this.train),
+            validationAccuracy: accuracy(this.model, this.validation),
+          }
+        : {}),
+    };
   }
 }

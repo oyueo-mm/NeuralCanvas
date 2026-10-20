@@ -14,6 +14,10 @@ import {
   type Point,
   type Settings,
   validatePoints,
+  classes,
+  classificationDataset,
+  type Task,
+  type ClassDefinition,
 } from "./engine";
 import type { Selection } from "./Network";
 import { loadExperiment, type Experiment, type RecordItem } from "./storage";
@@ -31,6 +35,12 @@ export function useLab() {
       "점을 만들고, 신경망을 설계하고, 학습을 관찰하세요.",
     ),
     [input, setInput] = useState(0),
+    [input2, setInput2] = useState(0),
+    [activeClass, setActiveClass] = useState<0 | 1>(0),
+    [classDefinitions, setClassDefinitions] = useState<ClassDefinition[]>([
+      ...classes,
+    ]),
+    [resolution, setResolution] = useState(48),
     [playing, setPlaying] = useState(false),
     [sweepSpeed, setSweepSpeed] = useState(1),
     [sweepMode, setSweepMode] = useState("왕복"),
@@ -51,9 +61,29 @@ export function useLab() {
     datasetFile = useRef<HTMLInputElement>(null),
     saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined),
     restore = useRef(false);
+  const task: Task = model.task ?? "regression";
+  const modes = useRef<
+    Partial<
+      Record<
+        Task,
+        {
+          experiment: Experiment;
+          undo: Point[][];
+          redo: Point[][];
+          preset: string;
+          count: number;
+          noise: number;
+          activeClass: 0 | 1;
+        }
+      >
+    >
+  >({});
   const plotSVG = useRef<SVGSVGElement | null>(null),
     networkSVG = useRef<SVGSVGElement | null>(null);
-  const f = useMemo(() => forward(model, input), [model, input]),
+  const f = useMemo(
+      () => forward(model, task === "classification" ? [input, input2] : input),
+      [model, input, input2, task],
+    ),
     latest = history.at(-1),
     parameters = model.layers.reduce(
       (s, l) => s + l.b.length + l.w.reduce((a, r) => a + r.length, 0),
@@ -83,16 +113,16 @@ export function useLab() {
   const changeData = useCallback(
     (p: Point[]) => {
       try {
-        validatePoints(p);
+        const valid = validatePoints(p, task);
         setUndo((u) => [...u.slice(-49), data]);
         setRedo([]);
         invalidate("데이터가 변경되었습니다. 학습 상태를 초기화했습니다.");
-        setData(p);
+        setData(valid);
       } catch (e) {
         setMessage(String(e));
       }
     },
-    [data, invalidate],
+    [data, invalidate, task],
   );
   const changeSettings = (s: Settings) => {
     invalidate();
@@ -100,7 +130,12 @@ export function useLab() {
   };
   const resize = (sizes: number[], acts: Activation[]) => {
     setSelection(null);
-    editModel(resizeModel(model, sizes, [...acts, "linear"]));
+    editModel(
+      resizeModel(model, sizes, [
+        ...acts,
+        task === "classification" ? "sigmoid" : "linear",
+      ]),
+    );
   };
   const mutate = (fn: (m: Model) => void) => {
     const m = structuredClone(model);
@@ -167,8 +202,20 @@ export function useLab() {
           : "학습을 한 단계 진행했습니다.",
     );
   }
-  const experiment = (): Experiment => ({
-    version: 1,
+  const experiment = (includeOther = true): Experiment => ({
+    version: 2,
+    task,
+    classes: classDefinitions,
+    input2,
+    ...(includeOther &&
+    modes.current[task === "regression" ? "classification" : "regression"]
+      ? {
+          other:
+            modes.current[
+              task === "regression" ? "classification" : "regression"
+            ]!.experiment,
+        }
+      : {}),
     name,
     model,
     data,
@@ -193,7 +240,7 @@ export function useLab() {
     return () => window.removeEventListener("pagehide", flush);
   }, []);
   function resetModel(init = model.init) {
-    const fresh = createModel(sizes, "tanh", settings.seed, init);
+    const fresh = createModel(sizes, "tanh", settings.seed, init, task);
     acts.forEach((a, k) => (fresh.layers[k].activation = a));
     setSelection(null);
     editModel(fresh);
@@ -207,6 +254,14 @@ export function useLab() {
     setEpoch(e.history.at(-1)?.epoch ?? 0);
     setStep(e.history.at(-1)?.step ?? 0);
     setInput(e.input);
+    setInput2(e.input2 ?? 0);
+    setClassDefinitions(
+      classes.map((c) => ({
+        ...c,
+        name: e.classes?.[c.id]?.name ?? c.name,
+        color: e.classes?.[c.id]?.color ?? c.color,
+      })),
+    );
     setName(e.name);
     setUndo([]);
     setRedo([]);
@@ -214,8 +269,63 @@ export function useLab() {
     setSelection(null);
     setPlaying(false);
     setGradient(undefined);
+    setPreset(e.model.task === "classification" ? "XOR" : "사인");
+    if (e.other)
+      modes.current[e.other.model.task ?? "regression"] = {
+        experiment: { ...e.other, other: undefined },
+        undo: [],
+        redo: [],
+        preset: e.other.model.task === "classification" ? "XOR" : "사인",
+        count: e.other.data.length,
+        noise: 0,
+        activeClass: 0,
+      };
     setMessage(
       "실험을 불러왔습니다. 가중치는 복원되며 다음 학습은 새 Optimizer로 시작합니다.",
+    );
+  }
+  function switchTask(next: Task) {
+    if (next === task) return;
+    modes.current[task] = {
+      experiment: experiment(false),
+      undo,
+      redo,
+      preset,
+      count,
+      noise,
+      activeClass,
+    };
+    const cached = modes.current[next];
+    const e: Experiment = cached?.experiment ?? {
+      version: 2,
+      task: next,
+      classes: [...classes],
+      name: next === "classification" ? "나의 분류 실험" : "나의 회귀 실험",
+      model: createModel(
+        next === "classification" ? [8, 8] : [4, 4],
+        "tanh",
+        42,
+        "xavier",
+        next,
+      ),
+      data:
+        next === "classification"
+          ? classificationDataset("XOR", 100)
+          : dataset("사인"),
+      settings: { ...defaults },
+      history: [],
+      input: 0,
+      input2: 0,
+    };
+    applyExperiment(e);
+    setUndo(cached?.undo ?? []);
+    setRedo(cached?.redo ?? []);
+    setPreset(cached?.preset ?? (next === "classification" ? "XOR" : "사인"));
+    setCount(cached?.count ?? (next === "classification" ? 100 : 50));
+    setNoise(cached?.noise ?? (next === "classification" ? 0.12 : 0));
+    setActiveClass(cached?.activeClass ?? 0);
+    setMessage(
+      `${next === "classification" ? "분류" : "회귀"} 실험으로 전환했습니다. 다른 모드의 데이터와 모델은 보관됩니다.`,
     );
   }
   useEffect(() => {
@@ -241,7 +351,7 @@ export function useLab() {
       }
     }, 700);
     return () => clearTimeout(saveTimer.current);
-  }, [model, data, settings, history, input, name]);
+  }, [model, data, settings, history, input, input2, name]);
   useEffect(() => {
     if (!playing) return;
     let id = 0,
@@ -287,8 +397,8 @@ export function useLab() {
       else
         changeData(
           item.name.endsWith(".csv")
-            ? parseCSV(text)
-            : validatePoints(JSON.parse(text)),
+            ? parseCSV(text, task)
+            : validatePoints(JSON.parse(text), task),
         );
     } catch (err) {
       setMessage(`불러오기 실패: ${String(err)}`);
@@ -326,6 +436,15 @@ export function useLab() {
     gradient,
     message,
     input,
+    input2,
+    setInput2,
+    task,
+    switchTask,
+    activeClass,
+    setActiveClass,
+    resolution,
+    setResolution,
+    classDefinitions,
     playing,
     sweepSpeed,
     sweepMode,

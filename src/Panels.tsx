@@ -2,6 +2,8 @@ import {
   activations,
   dataset,
   presets,
+  classificationPresets,
+  classificationDataset,
   type Activation,
   type Settings,
 } from "./engine";
@@ -9,8 +11,39 @@ import { download, exportSVG } from "./storage";
 import { format, Icon, NumberField } from "./ui";
 import type { Lab } from "./useLab";
 export function DataEditor({ lab: l }: { lab: Lab }) {
+  const classes = l.classDefinitions;
+  const makeData = (kind: string) =>
+    l.task === "classification"
+      ? classificationDataset(kind, l.count, l.noise, l.settings.seed)
+      : dataset(kind, l.count, l.noise, l.settings.seed);
   return (
     <>
+      <div className="button-row">
+        <button
+          disabled={!l.undo.length}
+          onClick={() => {
+            l.setRedo((r) => [...r, l.data]);
+            l.setData(l.undo.at(-1)!);
+            l.setUndo((u) => u.slice(0, -1));
+            l.invalidate();
+            l.setPoint(null);
+          }}
+        >
+          실행 취소
+        </button>
+        <button
+          disabled={!l.redo.length}
+          onClick={() => {
+            l.setUndo((u) => [...u, l.data]);
+            l.setData(l.redo.at(-1)!);
+            l.setRedo((r) => r.slice(0, -1));
+            l.invalidate();
+            l.setPoint(null);
+          }}
+        >
+          다시 실행
+        </button>
+      </div>
       <label className="field point-picker">
         <span>데이터 포인트</span>
         <select
@@ -65,6 +98,30 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
                   }
                 />
               </div>
+              {l.task === "classification" && (
+                <label className="field">
+                  <span>점 클래스</span>
+                  <select
+                    aria-label="선택 점 클래스"
+                    value={l.data[l.point].label}
+                    onChange={(e) =>
+                      l.changeData(
+                        l.data.map((p, i) =>
+                          i === l.point
+                            ? { ...p, label: +e.target.value as 0 | 1 }
+                            : p,
+                        ),
+                      )
+                    }
+                  >
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <details className="precision">
                 <summary>전체 정밀도 보기</summary>
                 <code>
@@ -92,20 +149,22 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
 
       <div className="section-label">데이터셋</div>
       <div className="preset-grid">
-        {presets.map((p) => (
-          <button
-            key={p}
-            aria-pressed={l.preset === p}
-            className={l.preset === p ? "selected" : ""}
-            onClick={() => {
-              l.setPreset(p);
-              l.setPoint(null);
-              l.changeData(dataset(p, l.count, l.noise, l.settings.seed));
-            }}
-          >
-            {p}
-          </button>
-        ))}
+        {(l.task === "classification" ? classificationPresets : presets).map(
+          (p) => (
+            <button
+              key={p}
+              aria-pressed={l.preset === p}
+              className={l.preset === p ? "selected" : ""}
+              onClick={() => {
+                l.setPreset(p);
+                l.setPoint(null);
+                l.changeData(makeData(p));
+              }}
+            >
+              {p}
+            </button>
+          ),
+        )}
       </div>
       <div className="form-grid">
         <NumberField
@@ -124,40 +183,9 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
           onChange={l.setNoise}
         />
       </div>
-      <button
-        className="wide"
-        onClick={() =>
-          l.changeData(dataset(l.preset, l.count, l.noise, l.settings.seed))
-        }
-      >
+      <button className="wide" onClick={() => l.changeData(makeData(l.preset))}>
         프리셋 다시 생성
       </button>
-      <div className="button-row">
-        <button
-          disabled={!l.undo.length}
-          onClick={() => {
-            l.setRedo((r) => [...r, l.data]);
-            l.setData(l.undo.at(-1)!);
-            l.setUndo((u) => u.slice(0, -1));
-            l.invalidate();
-            l.setPoint(null);
-          }}
-        >
-          실행 취소
-        </button>
-        <button
-          disabled={!l.redo.length}
-          onClick={() => {
-            l.setUndo((u) => [...u, l.data]);
-            l.setData(l.redo.at(-1)!);
-            l.setRedo((r) => r.slice(0, -1));
-            l.invalidate();
-            l.setPoint(null);
-          }}
-        >
-          다시 실행
-        </button>
-      </div>
 
       <section className="editor-section">
         <h3>가져오기 · 내보내기</h3>
@@ -169,7 +197,13 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
             onClick={() =>
               download(
                 "dataset.csv",
-                "x,y\n" + l.data.map((p) => `${p.x},${p.y}`).join("\n"),
+                (l.task === "classification" ? "x,y,label\n" : "x,y\n") +
+                  l.data
+                    .map(
+                      (p) =>
+                        `${p.x},${p.y}${l.task === "classification" ? `,${p.label}` : ""}`,
+                    )
+                    .join("\n"),
                 "text/csv",
               )
             }
@@ -283,6 +317,27 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
           </label>
           <dl className="detail-list">
             <div>
+              <dt>부호 / 크기 |w|</dt>
+              <dd>
+                {l.model.layers[l.edge.l].w[l.edge.j][l.edge.i] >= 0
+                  ? "양수 (+)"
+                  : "음수 (−)"}{" "}
+                /{" "}
+                {format(
+                  Math.abs(l.model.layers[l.edge.l].w[l.edge.j][l.edge.i]),
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>From → To ID</dt>
+              <dd>
+                {l.edge.l
+                  ? l.model.layers[l.edge.l - 1].neurons[l.edge.i]
+                  : `x${l.edge.i + 1}`}{" "}
+                → {l.model.layers[l.edge.l].neurons[l.edge.j]}
+              </dd>
+            </div>
+            <div>
               <dt>현재 입력의 기여량 w·a</dt>
               <dd>
                 {format(
@@ -307,6 +362,10 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
       {l.node && (
         <section className="inspector editor-section">
           <h3>뉴런 편집</h3>
+          <p className="muted neuron-identity">
+            ID {l.model.layers[l.node.l].neurons[l.node.j]} · layer{" "}
+            {l.node.l + 1} / index {l.node.j}
+          </p>
           <div className="form-grid">
             <NumberField
               label="편향"
@@ -320,6 +379,7 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
               <select
                 aria-label="선택 뉴런 층 활성화"
                 value={l.model.layers[l.node.l].activation}
+                disabled={l.node.l === l.model.layers.length - 1}
                 onChange={(e) =>
                   l.mutate(
                     (m) =>
@@ -347,6 +407,36 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
               <dt>최근 배치 ∂L/∂z</dt>
               <dd>
                 {l.gradient ? format(l.gradient.dz[l.node.l][l.node.j]) : "—"}
+              </dd>
+            </div>
+          </dl>
+          <dl className="detail-list weight-summary">
+            <div>
+              <dt>Incoming 활성 / 전체 · 평균 |w|</dt>
+              <dd>
+                {
+                  l.model.layers[l.node.l].enabled[l.node.j].filter(Boolean)
+                    .length
+                }{" "}
+                / {l.model.layers[l.node.l].w[l.node.j].length} ·{" "}
+                {format(
+                  l.model.layers[l.node.l].w[l.node.j].reduce(
+                    (s, w) => s + Math.abs(w),
+                    0,
+                  ) / l.model.layers[l.node.l].w[l.node.j].length,
+                  4,
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Outgoing 활성 / 전체 · 평균 |w|</dt>
+              <dd>
+                {(() => {
+                  const next = l.model.layers[l.node!.l + 1];
+                  return next
+                    ? `${next.enabled.filter((row) => row[l.node!.j]).length} / ${next.b.length} · ${format(next.w.reduce((s, row) => s + Math.abs(row[l.node!.j]), 0) / next.b.length, 4)}`
+                    : "출력 뉴런";
+                })()}
               </dd>
             </div>
           </dl>
@@ -389,7 +479,9 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
         <h3>네트워크 구조</h3>
         <div className="layer-row input-row">
           <span>입력층</span>
-          <span className="count">1 뉴런 · x</span>
+          <span className="count">
+            {l.task === "classification" ? "2 뉴런 · x₁, x₂" : "1 뉴런 · x"}
+          </span>
         </div>
         {l.hidden.map((layer, k) => (
           <div className="layer-config" key={layer.id}>
@@ -612,7 +704,9 @@ export function ObservationSettings({ lab: l }: { lab: Lab }) {
   return (
     <>
       <p className="muted">
-        모델의 가중치를 고정하고 같은 입력 x가 각 층을 거치는 과정을 관찰합니다.
+        모델의 가중치를 고정하고 입력이 각 층을 거치는 과정을 관찰합니다.
+        {l.task === "classification" &&
+          " 데이터 화면의 좌표 관찰로 두 입력을 함께 바꿀 수 있습니다."}
       </p>
       <div className="form-grid">
         <NumberField
@@ -622,6 +716,15 @@ export function ObservationSettings({ lab: l }: { lab: Lab }) {
           max={5}
           onChange={l.setInput}
         />
+        {l.task === "classification" && (
+          <NumberField
+            label="입력 x2"
+            value={l.input2}
+            min={-1000}
+            max={1000}
+            onChange={l.setInput2}
+          />
+        )}
         <NumberField
           label="순회 속도"
           value={l.sweepSpeed}
@@ -648,7 +751,7 @@ export function ObservationSettings({ lab: l }: { lab: Lab }) {
           <dd>{format(l.input)}</dd>
         </div>
         <div>
-          <dt>모델 출력 ŷ</dt>
+          <dt>{l.task === "classification" ? "P(클래스 1)" : "모델 출력 ŷ"}</dt>
           <dd>{format(l.f.y)}</dd>
         </div>
       </dl>

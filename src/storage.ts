@@ -4,15 +4,22 @@ import {
   type Model,
   type Settings,
   type Point,
+  type Task,
 } from "./engine";
 export type RecordItem = {
   epoch: number;
   step: number;
   train: number;
   validation?: number;
+  accuracy?: number;
+  validationAccuracy?: number;
 };
 export type Experiment = {
-  version: 1;
+  version: 1 | 2;
+  task?: Task;
+  classes?: { id: number; name: string; color: string }[];
+  input2?: number;
+  other?: Experiment;
   name: string;
   model: Model;
   data: Point[];
@@ -26,9 +33,30 @@ export function loadExperiment(text: string): Experiment {
   if (text.length > 5_000_000)
     throw Error("파일이 너무 큽니다. 최대 5MB입니다.");
   const e = JSON.parse(text);
-  if (e?.version !== 1 || typeof e.name !== "string" || e.name.length > 200)
+  if (
+    ![1, 2].includes(e?.version) ||
+    typeof e.name !== "string" ||
+    e.name.length > 200
+  )
     throw Error("지원하지 않는 실험 형식입니다.");
-  const data = validatePoints(e.data),
+  const task = e.version === 1 ? "regression" : e.task;
+  if (!["regression", "classification"].includes(task))
+    throw Error("실험 유형이 올바르지 않습니다.");
+  if (
+    e.version === 2 &&
+    (!finite(e.input2, -1000, 1000) ||
+      !Array.isArray(e.classes) ||
+      e.classes.length !== 2 ||
+      e.classes.some(
+        (c: { id: number; name: string; color: string }, i: number) =>
+          c.id !== i ||
+          typeof c.name !== "string" ||
+          c.name.length > 100 ||
+          !/^#[\da-f]{6}$/i.test(c.color),
+      ))
+  )
+    throw Error("클래스 또는 관찰 좌표가 올바르지 않습니다.");
+  const data = validatePoints(e.data, task),
     m = e.model,
     s = e.settings;
   if (
@@ -40,7 +68,11 @@ export function loadExperiment(text: string): Experiment {
     !["xavier", "he", "zero"].includes(m.init)
   )
     throw Error("모델 형식이 올바르지 않습니다.");
-  let previous = 1;
+  if ((m.task ?? "regression") !== task)
+    throw Error("모델과 실험 유형이 다릅니다.");
+  if (task === "classification" && m.layers.at(-1)?.activation !== "sigmoid")
+    throw Error("분류 출력층은 sigmoid여야 합니다.");
+  let previous = task === "classification" ? 2 : 1;
   const ids = new Set<string>();
   for (const [k, l] of m.layers.entries()) {
     const n = l?.b?.length;
@@ -100,11 +132,20 @@ export function loadExperiment(text: string): Experiment {
         !finite(r.step, 0, 1e10) ||
         !finite(r.epoch, 0, 1e10) ||
         !finite(r.train, 0, 1e15) ||
-        (r.validation !== undefined && !finite(r.validation, 0, 1e15)),
+        (r.validation !== undefined && !finite(r.validation, 0, 1e15)) ||
+        (r.accuracy !== undefined && !finite(r.accuracy, 0, 1)) ||
+        (r.validationAccuracy !== undefined &&
+          !finite(r.validationAccuracy, 0, 1)),
     ) ||
     !finite(e.input, -1000, 1000)
   )
     throw Error("이력 또는 입력값이 올바르지 않습니다.");
+  if (e.other) {
+    if (e.other.other) throw Error("중첩된 실험은 지원하지 않습니다.");
+    e.other = loadExperiment(JSON.stringify(e.other));
+    if ((e.other.task ?? "regression") === task)
+      throw Error("보관된 실험 유형이 중복됩니다.");
+  }
   return { ...e, data };
 }
 export function download(

@@ -1,4 +1,4 @@
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 const url = process.argv[2] ?? "https://oyueo-mm.github.io/NeuralCanvas/";
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -29,8 +29,39 @@ await page.waitForFunction(
 await page.getByRole("button", { name: "입력 순회", exact: true }).click();
 await page.waitForTimeout(200);
 await page.getByRole("button", { name: "순회 일시정지", exact: true }).click();
+await page.waitForTimeout(800);
+const regression = JSON.parse(
+  await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")),
+);
+await page.getByRole("button", { name: /^분류 Classification/ }).click();
+await expect(page.getByTestId("decision-boundary")).toBeVisible();
+await expect(page.getByTestId("data-point")).toHaveCount(100);
+await page.getByRole("button", { name: "한 스텝", exact: true }).click();
+await expect(page.getByTestId("accuracy")).toHaveText(/\d+\.\d+%/);
+await page.waitForTimeout(800);
+const classification = JSON.parse(
+  await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")),
+);
+expect(classification.task).toBe("classification");
+expect(classification.model.layers[0].w[0]).toHaveLength(2);
+expect(classification.history.at(-1).train).toBeGreaterThan(0);
+const boundary = {
+  updates: await page
+    .getByTestId("data-plot")
+    .getAttribute("data-boundary-updates"),
+  workerMs: await page
+    .getByTestId("data-plot")
+    .getAttribute("data-boundary-ms"),
+};
+await page.getByRole("button", { name: /^회귀 Regression/ }).click();
+await page.waitForTimeout(800);
+const restored = JSON.parse(
+  await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")),
+);
+expect(restored.model).toEqual(regression.model);
+expect(restored.data).toEqual(regression.data);
 const workerHTTP = [];
-for (const workerURL of workers) {
+for (const workerURL of new Set(workers)) {
   const r = await page.request.get(workerURL);
   workerHTTP.push({ url: workerURL, status: r.status() });
 }
@@ -41,6 +72,12 @@ console.log(
       htmlStatus: response.status(),
       assets,
       workerHTTP,
+      classification: {
+        task: classification.task,
+        accuracy: classification.history.at(-1).accuracy,
+        boundary,
+      },
+      regressionRestored: true,
       errors,
       badResponses,
       failed,

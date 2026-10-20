@@ -412,6 +412,7 @@ dd,
   padding: 3px;
 }
 .segmented button {
+  white-space: nowrap;
   border: 0;
   min-height: 34px;
   padding: 6px 9px;
@@ -461,6 +462,92 @@ dd,
 }
 .data-plot.edit {
   cursor: crosshair;
+}
+.data-plot.draw,
+.data-plot.observe {
+  cursor: crosshair;
+}
+.task-switch {
+  flex-shrink: 0;
+}
+.classification-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 14px;
+  flex-shrink: 0;
+}
+.class-selector {
+  display: flex;
+  gap: 4px;
+}
+.class-selector button {
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+.class-selector i {
+  width: 9px;
+  height: 9px;
+  background: var(--class-color);
+  border-radius: 50%;
+}
+.class-selector button[aria-pressed="true"] {
+  border-color: var(--class-color);
+  box-shadow: inset 0 0 0 1px var(--class-color);
+}
+.classification-tools > button {
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.resolution-control {
+  white-space: nowrap;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  color: #64748b;
+}
+.resolution-control select {
+  min-height: 44px;
+  padding: 4px;
+  font-size: 11px;
+}
+.probability-scale {
+  width: 70px;
+  height: 9px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #dbeafe, #fde1d4);
+  border: 1px solid #cbd5e1;
+}
+.confusion-matrix {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: min(100%, 480px);
+  margin: 20px 0;
+}
+.confusion-matrix caption {
+  text-align: left;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.confusion-matrix th,
+.confusion-matrix td {
+  border: 1px solid #e2e8f0;
+  padding: 9px 14px;
+  text-align: center;
+}
+.confusion-matrix th {
+  background: #f8fafc;
+  font-weight: 500;
+}
+.neuron-identity,
+.weight-summary {
+  overflow-wrap: anywhere;
 }
 .data-plot.pan,
 .network-scene svg {
@@ -1088,10 +1175,57 @@ summary:focus-visible {
     flex-direction: column;
   }
   .app-header {
-    height: 56px;
-    min-height: 56px;
+    height: 100px;
+    min-height: 100px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 50px 44px;
     padding: 0 14px;
     gap: 8px;
+  }
+  .task-switch {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+    justify-content: center;
+  }
+  .task-switch button {
+    flex: 1;
+    min-height: 38px;
+  }
+  .header-actions {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .classification-tools {
+    padding: 3px 8px;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .classification-tools .class-selector {
+    flex: 1;
+  }
+  .classification-tools .class-selector button {
+    padding: 5px 7px;
+  }
+  .resolution-control {
+    font-size: 0;
+  }
+  .resolution-control select {
+    max-width: 78px;
+  }
+  .task-classification .observation-bar > .probe-value strong {
+    display: none;
+  }
+  .task-classification .observation-play:after {
+    display: none;
+  }
+  .observation-bar > input {
+    min-width: 0;
+    width: 0;
+  }
+  .task-classification .parameter-summary {
+    display: none;
   }
   .brand {
     gap: 7px;
@@ -1260,6 +1394,9 @@ summary:focus-visible {
     min-height: 40px;
     font-size: 12px;
     padding: 6px 8px;
+  }
+  .graph-toolbar .segmented button svg {
+    display: none;
   }
   .button-group .icon-button {
     width: 44px;

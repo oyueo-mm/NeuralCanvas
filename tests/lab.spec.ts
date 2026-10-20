@@ -200,10 +200,14 @@ test("drawer focus, settings, JSON compatibility and PNG export", async ({
   await page.getByRole("button", { name: "실험 저장 · JSON" }).click();
   const downloaded = await dl,
     body = JSON.parse(await readFile((await downloaded.path())!, "utf8"));
-  expect(body.version).toBe(1);
+  expect(body.version).toBe(2);
   expect(body.settings.lr).toBe(0.005);
   await close(page);
   body.name = "복원 실험";
+  body.version = 1;
+  delete body.task;
+  delete body.classes;
+  delete body.input2;
   body.model.layers[0].w[0][0] = 2.5;
   await page
     .locator("input[type=file]")

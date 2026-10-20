@@ -20,20 +20,34 @@ export default function App() {
     [dockMore, setDockMore] = useState(false);
   const compact = useCompact();
   const opener = useRef<HTMLElement | null>(null);
-  const dataSnapshot = useRef({ model: l.model, input: l.input });
+  const dataSnapshot = useRef({
+    model: l.model,
+    input: l.input,
+    input2: l.input2,
+  });
   const networkSnapshot = useRef({
     model: l.model,
     input: l.input,
+    input2: l.input2,
     gradient: l.gradient,
     playing: l.playing,
     phase: l.phase,
   });
-  if (!compact || l.tab === "data")
-    dataSnapshot.current = { model: l.model, input: l.input };
-  if (!compact || l.tab === "network")
+  if (
+    !compact ||
+    l.tab === "data" ||
+    dataSnapshot.current.model.task !== l.model.task
+  )
+    dataSnapshot.current = { model: l.model, input: l.input, input2: l.input2 };
+  if (
+    !compact ||
+    l.tab === "network" ||
+    networkSnapshot.current.model.task !== l.model.task
+  )
     networkSnapshot.current = {
       model: l.model,
       input: l.input,
+      input2: l.input2,
       gradient: l.gradient,
       playing: l.playing,
       phase: l.phase,
@@ -53,6 +67,13 @@ export default function App() {
       setPanel("model");
     },
     [l.setSelection],
+  );
+  const observe = useCallback(
+    (x: number, y: number) => {
+      l.setInput(x);
+      l.setInput2(y);
+    },
+    [l.setInput, l.setInput2],
   );
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -100,7 +121,7 @@ export default function App() {
               : "실험 메뉴";
   return (
     <div
-      className={`app-shell active-${l.tab}`}
+      className={`app-shell active-${l.tab} task-${l.task}`}
       onPointerDownCapture={(e) => {
         const target = (e.target as Element).closest(
           'button, a, [role="button"]',
@@ -123,6 +144,26 @@ export default function App() {
           </strong>
           <span className="brand-caption">신경망 실험실</span>
         </a>
+        <div
+          className="segmented task-switch"
+          role="group"
+          aria-label="실험 유형"
+        >
+          <button
+            aria-pressed={l.task === "regression"}
+            className={l.task === "regression" ? "active" : ""}
+            onClick={() => l.switchTask("regression")}
+          >
+            회귀<span> Regression</span>
+          </button>
+          <button
+            aria-pressed={l.task === "classification"}
+            className={l.task === "classification" ? "active" : ""}
+            onClick={() => l.switchTask("classification")}
+          >
+            분류<span> Classification</span>
+          </button>
+        </div>
         <div className="header-actions">
           <span className={`status-badge ${l.running ? "running" : ""}`}>
             <i />
@@ -167,7 +208,10 @@ export default function App() {
           <div className="experiment-title">
             <strong>{l.name}</strong>
             <span>
-              1차원 회귀 · {l.settings.optimizer === "adam" ? "Adam" : "SGD"}
+              {l.task === "classification"
+                ? "2차원 분류 · BCE"
+                : "1차원 회귀 · MSE"}{" "}
+              · {l.settings.optimizer === "adam" ? "Adam" : "SGD"}
             </span>
           </div>
           <div className="summary-metrics">
@@ -179,15 +223,29 @@ export default function App() {
               </strong>
             </div>
             <div>
-              <span>학습 MSE</span>
+              <span>
+                {l.task === "classification" ? "학습 BCE" : "학습 MSE"}
+              </span>
               <strong data-testid="loss">
                 {l.latest ? format(l.latest.train) : "—"}
               </strong>
             </div>
             {l.latest?.validation !== undefined && (
               <div className="validation-summary">
-                <span>검증 MSE</span>
+                <span>
+                  {l.task === "classification" ? "검증 BCE" : "검증 MSE"}
+                </span>
                 <strong>{format(l.latest.validation)}</strong>
+              </div>
+            )}
+            {l.task === "classification" && (
+              <div className="accuracy-summary">
+                <span>학습 정확도</span>
+                <strong data-testid="accuracy">
+                  {l.latest?.accuracy === undefined
+                    ? "—"
+                    : `${(l.latest.accuracy * 100).toFixed(1)}%`}
+                </strong>
               </div>
             )}
             <div className="parameter-summary">
@@ -240,10 +298,19 @@ export default function App() {
             aria-label="데이터 화면"
           >
             <Plot
+              key={l.task}
               exportRef={l.plotSVG}
               model={dataSnapshot.current.model}
               data={l.data}
               input={dataSnapshot.current.input}
+              input2={dataSnapshot.current.input2}
+              activeClass={l.activeClass}
+              classDefinitions={l.classDefinitions}
+              setActiveClass={l.setActiveClass}
+              resolution={l.resolution}
+              setResolution={l.setResolution}
+              active={!compact || l.tab === "data"}
+              observe={observe}
               change={l.changeData}
               selected={l.point}
               select={l.setPoint}
@@ -258,9 +325,11 @@ export default function App() {
             aria-label="신경망 화면"
           >
             <Network
+              key={l.task}
               exportRef={l.networkSVG}
               model={networkSnapshot.current.model}
               input={networkSnapshot.current.input}
+              input2={networkSnapshot.current.input2}
               selection={l.selection}
               select={selectObject}
               gradient={networkSnapshot.current.gradient}
@@ -285,7 +354,8 @@ export default function App() {
             <span>{l.playing ? "순회 중" : "입력 관찰"}</span>
           </button>
           <span className="probe-value">
-            x <strong>{l.input.toFixed(2)}</strong>
+            {l.task === "classification" ? "x₁" : "x"}{" "}
+            <strong>{l.input.toFixed(2)}</strong>
           </span>
           <input
             aria-label="관찰 입력 x"
@@ -296,8 +366,35 @@ export default function App() {
             value={l.input}
             onChange={(e) => l.setInput(+e.target.value)}
           />
+          {l.task === "classification" && (
+            <>
+              <span className="probe-value">
+                x₂ <strong>{l.input2.toFixed(2)}</strong>
+              </span>
+              <input
+                aria-label="관찰 입력 x2"
+                type="range"
+                min="-5"
+                max="5"
+                step=".01"
+                value={l.input2}
+                onChange={(e) => l.setInput2(+e.target.value)}
+              />
+            </>
+          )}
           <span className="probe-output">
-            ŷ <strong>{format(l.f.y, 4)}</strong>
+            {l.task === "classification" ? (
+              <>
+                C{Number(l.f.y >= 0.5)}{" "}
+                <strong data-testid="probability">
+                  {((l.f.y >= 0.5 ? l.f.y : 1 - l.f.y) * 100).toFixed(1)}%
+                </strong>
+              </>
+            ) : (
+              <>
+                ŷ <strong>{format(l.f.y, 4)}</strong>
+              </>
+            )}
           </span>
           <button
             className="icon-button"
@@ -418,7 +515,9 @@ export default function App() {
             </span>
             <span>{analysis ? "접기 −" : "펼치기 ＋"}</span>
           </button>
-          {(analysis || l.tab === "analysis") && <Analysis lab={l} />}
+          {(analysis || (compact && l.tab === "analysis")) && (
+            <Analysis lab={l} />
+          )}
         </section>
       </main>
       {panel && (

@@ -1,4 +1,67 @@
 import { test, expect } from "@playwright/test";
+test("classification touch stroke, undo, point move and bottom sheet", async ({
+  page,
+  browserName,
+}, info) => {
+  test.skip(
+    info.project.name !== "mobile" || browserName !== "chromium",
+    "Chromium multi-touch input.",
+  );
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("./");
+  await page.getByRole("button", { name: /^분류 Classification/ }).tap();
+  await page.getByRole("button", { name: "클래스 1", exact: true }).tap();
+  await page.getByRole("button", { name: "연속 그리기", exact: true }).tap();
+  const b = (await page.getByTestId("data-plot").boundingBox())!,
+    session = await page.context().newCDPSession(page);
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: b.x + 55, y: b.y + 65, id: 1 }],
+  });
+  for (let i = 1; i <= 12; i++)
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: b.x + 55 + i * 17, y: b.y + 65 + i * 2, id: 1 }],
+    });
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  const count = await page.getByTestId("data-point").count();
+  expect(count).toBeGreaterThan(105);
+  await page.getByRole("button", { name: "데이터 편집", exact: true }).tap();
+  await page.getByRole("button", { name: "실행 취소", exact: true }).tap();
+  await expect(page.getByTestId("data-point")).toHaveCount(100);
+  await page.getByRole("button", { name: "다시 실행", exact: true }).tap();
+  await expect(page.getByTestId("data-point")).toHaveCount(count);
+  await page.getByRole("button", { name: "패널 닫기" }).tap();
+  await page.getByRole("button", { name: "점 편집", exact: true }).tap();
+  const p = (await page.getByTestId("data-point").last().boundingBox())!;
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: p.x + p.width / 2, y: p.y + p.height / 2, id: 1 }],
+  });
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: p.x - 20, y: p.y + 25, id: 1 }],
+  });
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await page.getByTestId("data-point").last().tap();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "선택 점 삭제" }),
+  ).toBeInViewport({ ratio: 1 });
+  await expect(page.getByLabel("선택 점 클래스")).toHaveValue("1");
+  await page.getByRole("button", { name: "선택 점 삭제" }).tap();
+  await page.getByRole("button", { name: "패널 닫기" }).tap();
+  await expect(page.getByTestId("data-point")).toHaveCount(count - 1);
+  await expect(page.getByTestId("decision-boundary")).toBeVisible();
+  expect(errors).toEqual([]);
+});
 test("touch pinch, pan, selection, tab retention and keyboard-sized viewport", async ({
   page,
   browserName,
