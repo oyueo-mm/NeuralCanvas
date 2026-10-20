@@ -9,7 +9,9 @@ for (const [sizes, points] of [
   const page = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
   });
-  await page.goto("http://127.0.0.1:4173/NeuralCanvas/");
+  await page.goto(
+    process.env.NEURALCANVAS_URL ?? "http://127.0.0.1:4175/NeuralCanvas/",
+  );
   const experiment = {
     version: 1,
     name: "UI performance",
@@ -27,7 +29,7 @@ for (const [sizes, points] of [
       mimeType: "application/json",
       buffer: Buffer.from(JSON.stringify(experiment)),
     });
-  await page.getByRole("button", { name: "▶ 학습 시작", exact: true }).click();
+  await page.getByRole("button", { name: "학습 시작", exact: true }).click();
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Performance.enable");
   const before = await cdp.send("Performance.getMetrics");
@@ -76,7 +78,7 @@ for (const [sizes, points] of [
     (value(after, "TaskDuration") - value(before, "TaskDuration")) * 1000;
   const elapsedMs =
     (value(after, "Timestamp") - value(before, "Timestamp")) * 1000;
-  await page.getByRole("button", { name: "Ⅱ 일시정지", exact: true }).click();
+  await page.getByRole("button", { name: "일시정지", exact: true }).click();
   const result = {
     sizes,
     points,

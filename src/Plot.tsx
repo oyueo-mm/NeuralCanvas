@@ -1,329 +1,480 @@
-import { useRef, useState, type PointerEvent } from "react";
+import {
+  memo,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+  type RefObject,
+} from "react";
 import { forward, type Model, type Point } from "./engine";
 import { exportSVG } from "./storage";
+import { Icon, useElementSize } from "./ui";
+type Range = { cx: number; cy: number; span: number };
 type Props = {
+  exportRef: RefObject<SVGSVGElement | null>;
   model: Model;
   data: Point[];
   input: number;
-  setInput: (n: number) => void;
   change: (p: Point[]) => void;
   selected: number | null;
   select: (i: number | null) => void;
+  edit: () => void;
+  validationIndices: Set<number>;
 };
-export function Plot({
+export const Plot = memo(function Plot({
   model,
   data,
   input,
-  setInput,
   change,
   selected,
   select,
+  edit,
+  validationIndices,
+  exportRef,
 }: Props) {
   const [mode, setMode] = useState<"edit" | "pan">("edit"),
-    [range, setRange] = useState({ cx: 0, cy: 0, span: 10 }),
-    [cursor, setCursor] = useState<Point | null>(null);
+    [range, setRange] = useState<Range>({ cx: 0, cy: 0, span: 10 }),
+    [cursor, setCursor] = useState<Point | null>(null),
+    [preview, setPreview] = useState<Point[] | null>(null);
+  const { ref, width, height } = useElementSize(),
+    W = Math.max(280, width),
+    H = Math.max(200, height),
+    pad = 34,
+    id = useId().replace(/:/g, "");
   const svg = useRef<SVGSVGElement>(null),
-    drag = useRef<{
-      i: number;
-      start: Point;
-      original: Point[];
-      range: typeof range;
-    } | null>(null);
-  const W = 600,
-    H = 460,
-    pad = 40;
+    pointers = useRef(new Map<number, { x: number; y: number }>()),
+    gesture = useRef<{
+      point: number;
+      start: { x: number; y: number };
+      range: Range;
+      data: Point[];
+      moved: boolean;
+    } | null>(null),
+    pinch = useRef<{
+      distance: number;
+      mid: { x: number; y: number };
+      range: Range;
+    } | null>(null),
+    draft = useRef<Point[] | null>(null);
   const sx = (x: number) =>
-      pad + ((x - range.cx + range.span / 2) / range.span) * (W - pad * 2),
+      pad + ((x - range.cx + range.span / 2) / range.span) * (W - 2 * pad),
     sy = (y: number) =>
-      H - pad - ((y - range.cy + range.span / 2) / range.span) * (H - pad * 2);
-  const from = (e: PointerEvent<SVGSVGElement>) => {
-    const p = svg.current!.createSVGPoint();
+      H - pad - ((y - range.cy + range.span / 2) / range.span) * (H - 2 * pad);
+  const local = (e: PointerEvent<SVGSVGElement>) => {
+    const p = e.currentTarget.createSVGPoint();
     p.x = e.clientX;
     p.y = e.clientY;
-    const local = p.matrixTransform(svg.current!.getScreenCTM()!.inverse());
-    return {
-      x:
-        range.cx +
-        ((local.x - pad) / (W - 2 * pad)) * range.span -
-        range.span / 2,
-      y:
-        range.cy +
-        ((H - pad - local.y) / (H - 2 * pad)) * range.span -
-        range.span / 2,
-    };
+    return p.matrixTransform(e.currentTarget.getScreenCTM()!.inverse());
   };
+  const math = (p: { x: number; y: number }, r = range) => ({
+    x: r.cx + ((p.x - pad) / (W - 2 * pad)) * r.span - r.span / 2,
+    y: r.cy + ((H - pad - p.y) / (H - 2 * pad)) * r.span - r.span / 2,
+  });
+  const path = useMemo(
+    () =>
+      Array.from({ length: 241 }, (_, i) => {
+        const x = range.cx - range.span / 2 + (range.span * i) / 240,
+          y = forward(model, x).y;
+        const px = pad + (i / 240) * (W - 2 * pad),
+          py =
+            H -
+            pad -
+            ((y - range.cy + range.span / 2) / range.span) * (H - 2 * pad);
+        return `${i ? "L" : "M"}${px},${Math.max(-10000, Math.min(10000, py))}`;
+      }).join(" "),
+    [model, range, W, H],
+  );
   const ticks = Array.from(
-      { length: 11 },
-      (_, i) => range.cx - range.span / 2 + (range.span * i) / 10,
+      { length: 6 },
+      (_, i) => range.cx - range.span / 2 + (range.span * i) / 5,
     ),
-    yticks = Array.from(
-      { length: 11 },
-      (_, i) => range.cy - range.span / 2 + (range.span * i) / 10,
-    );
-  const path = Array.from({ length: 241 }, (_, i) => {
-    const x = range.cx - range.span / 2 + (range.span * i) / 240,
-      y = forward(model, x).y;
-    return `${i ? "L" : "M"}${sx(x)},${Math.max(-10000, Math.min(10000, sy(y)))}`;
-  }).join(" ");
+    ys = Array.from(
+      { length: 6 },
+      (_, i) => range.cy - range.span / 2 + (range.span * i) / 5,
+    ),
+    shown = preview ?? data;
   function fit() {
+    const xs = data.map((p) => p.x),
+      ys = data.map((p) => p.y);
     if (!data.length) {
       setRange({ cx: 0, cy: 0, span: 10 });
       return;
     }
-    const xs = data.map((p) => p.x),
-      ys = data.map((p) => p.y),
-      lo = Math.min(...xs),
-      hi = Math.max(...xs),
-      bottom = Math.min(...ys),
-      top = Math.max(...ys);
     setRange({
-      cx: (lo + hi) / 2,
-      cy: (bottom + top) / 2,
-      span: Math.max(2, hi - lo, top - bottom) * 1.25,
+      cx: (Math.min(...xs) + Math.max(...xs)) / 2,
+      cy: (Math.min(...ys) + Math.max(...ys)) / 2,
+      span:
+        Math.max(
+          2,
+          Math.max(...xs) - Math.min(...xs),
+          Math.max(...ys) - Math.min(...ys),
+        ) * 1.25,
     });
   }
+  function down(e: PointerEvent<SVGSVGElement>) {
+    if (e.button !== 0) return;
+    const p = local(e);
+    pointers.current.set(e.pointerId, p);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      pinch.current = {
+        distance: Math.hypot(a.x - b.x, a.y - b.y),
+        mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        range,
+      };
+      gesture.current = null;
+      draft.current = null;
+      setPreview(null);
+      return;
+    }
+    if (pointers.current.size > 2) return;
+    let point = -1,
+      best = e.pointerType === "touch" ? 24 : 13;
+    data.forEach((v, j) => {
+      const distance = Math.hypot(sx(v.x) - p.x, sy(v.y) - p.y);
+      if (distance < best) {
+        point = j;
+        best = distance;
+      }
+    });
+    gesture.current = {
+      point: mode === "pan" ? -2 : point,
+      start: p,
+      range,
+      data,
+      moved: false,
+    };
+  }
+  function move(e: PointerEvent<SVGSVGElement>) {
+    const p = local(e);
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, p);
+    if (pointers.current.size >= 2 && pinch.current) {
+      const [a, b] = [...pointers.current.values()],
+        base = pinch.current,
+        d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+      setRange({
+        cx:
+          base.range.cx -
+          (((a.x + b.x) / 2 - base.mid.x) / (W - 2 * pad)) * base.range.span,
+        cy:
+          base.range.cy +
+          (((a.y + b.y) / 2 - base.mid.y) / (H - 2 * pad)) * base.range.span,
+        span: Math.max(
+          0.1,
+          Math.min(2000, (base.range.span * base.distance) / d),
+        ),
+      });
+      return;
+    }
+    const g = gesture.current;
+    if (!g) {
+      if (e.pointerType !== "touch") setCursor(math(p));
+      return;
+    }
+    g.moved ||= Math.hypot(p.x - g.start.x, p.y - g.start.y) > 5;
+    if (g.point === -2) {
+      setRange({
+        ...g.range,
+        cx: g.range.cx - ((p.x - g.start.x) / (W - 2 * pad)) * g.range.span,
+        cy: g.range.cy + ((p.y - g.start.y) / (H - 2 * pad)) * g.range.span,
+      });
+    } else if (g.point >= 0 && g.moved) {
+      const next = [...g.data],
+        position = math(p, g.range);
+      next[g.point] = {
+        x: Math.max(-1000, Math.min(1000, position.x)),
+        y: Math.max(-1000, Math.min(1000, position.y)),
+      };
+      draft.current = next;
+      setPreview(next);
+    }
+  }
+  function up(e: PointerEvent<SVGSVGElement>) {
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    pointers.current.delete(e.pointerId);
+    if (pinch.current) {
+      if (pointers.current.size === 0) pinch.current = null;
+      gesture.current = null;
+      return;
+    }
+    const g = gesture.current;
+    if (g && g.point !== -2) {
+      if (draft.current) {
+        change(draft.current);
+        select(g.point);
+      } else if (g.point >= 0) {
+        select(g.point);
+        svg.current?.focus({ preventScroll: true });
+        edit();
+      } else if (!g.moved && data.length < 2000) {
+        const p = math(local(e));
+        change([...data, p]);
+        select(data.length);
+      }
+    }
+    gesture.current = null;
+    draft.current = null;
+    setPreview(null);
+  }
   return (
-    <section className="panel plot-panel">
-      <div className="panel-heading">
-        <div>
-          <span className="eyebrow">01 / DATA SPACE</span>
-          <h2>
-            데이터 캔버스 <span className="count">{data.length} points</span>
-          </h2>
-        </div>
-        <button
-          onClick={() =>
-            svg.current && exportSVG(svg.current, "neuralcanvas-plot.png")
-          }
-          title="그래프 PNG 다운로드"
-        >
-          ↗ PNG
-        </button>
-      </div>
-      <div className="plot-tools">
-        <div className="segmented">
+    <section className="visual-panel plot-panel" aria-label="데이터 작업 공간">
+      <header className="visual-heading">
+        <h2>
+          <Icon name="data" />
+          데이터와 예측 <span className="count">{data.length}개</span>
+        </h2>
+        <div className="heading-actions">
           <button
+            className="icon-button"
+            aria-label="데이터 그래프 PNG"
+            onClick={() =>
+              svg.current && exportSVG(svg.current, "neuralcanvas-plot.png")
+            }
+          >
+            <Icon name="download" />
+          </button>
+          <button className="subtle-button" onClick={edit}>
+            <Icon name="edit" />
+            데이터 편집
+          </button>
+        </div>
+      </header>
+      <div className="graph-toolbar">
+        <div className="segmented" aria-label="데이터 조작 모드">
+          <button
+            aria-pressed={mode === "edit"}
             className={mode === "edit" ? "active" : ""}
             onClick={() => setMode("edit")}
           >
-            ＋ 점 편집
+            <Icon name="edit" />점 편집
           </button>
           <button
+            aria-pressed={mode === "pan"}
             className={mode === "pan" ? "active" : ""}
             onClick={() => setMode("pan")}
           >
-            ✥ 탐색
+            <Icon name="pan" />
+            탐색
           </button>
         </div>
         <div className="button-group">
           <button
+            className="icon-button"
             aria-label="데이터 축소"
             onClick={() =>
               setRange({ ...range, span: Math.min(2000, range.span * 1.25) })
             }
           >
-            −
+            <Icon name="minus" />
           </button>
           <button
+            className="icon-button"
             aria-label="데이터 확대"
             onClick={() =>
               setRange({ ...range, span: Math.max(0.1, range.span / 1.25) })
             }
           >
-            ＋
+            <Icon name="plus" />
           </button>
-          <button onClick={fit}>맞춤</button>
+          <button
+            className="icon-button"
+            aria-label="데이터 화면 맞춤"
+            onPointerUp={(e) => {
+              if (e.pointerType === "touch") fit();
+            }}
+            title="데이터 화면 맞춤"
+            onClick={fit}
+          >
+            <Icon name="fit" />
+          </button>
         </div>
       </div>
-      <svg
-        ref={svg}
-        data-testid="data-plot"
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label="데이터와 신경망 예측 곡선"
-        className={`data-plot ${mode}`}
-        onWheel={(e) =>
-          setRange({
-            ...range,
-            span: Math.max(
-              0.1,
-              Math.min(2000, range.span * (e.deltaY > 0 ? 1.1 : 0.9)),
-            ),
-          })
-        }
-        onPointerDown={(e) => {
-          if (e.button !== 0) return;
-          const p = from(e);
-          let i = -1,
-            best = 12;
-          data.forEach((v, j) => {
-            const d = Math.hypot(sx(v.x) - sx(p.x), sy(v.y) - sy(p.y));
-            if (d < best) {
-              best = d;
-              i = j;
-            }
-          });
-          if (mode === "edit" && i < 0) {
-            if (data.length >= 2000) return;
-            change([...data, p]);
-            select(data.length);
-            return;
-          }
-          select(i < 0 ? null : i);
-          drag.current = {
-            i: mode === "pan" ? -1 : i,
-            start: p,
-            original: structuredClone(data),
-            range,
-          };
-          e.currentTarget.setPointerCapture(e.pointerId);
-        }}
-        onPointerMove={(e) => {
-          const p = from(e);
-          setCursor(p);
-          const d = drag.current;
-          if (!d) return;
-          if (d.i === -1) {
+      <div ref={ref} className="scene">
+        <svg
+          ref={(node) => {
+            svg.current = node;
+            exportRef.current = node;
+          }}
+          data-testid="data-plot"
+          data-span={range.span}
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          tabIndex={0}
+          aria-label="데이터와 신경망 예측 곡선"
+          className={`data-plot ${mode}`}
+          onPointerDown={down}
+          onPointerMove={move}
+          onPointerUp={up}
+          onPointerCancel={(e) => {
+            pointers.current.delete(e.pointerId);
+            gesture.current = null;
+            draft.current = null;
+            pinch.current = null;
+            setPreview(null);
+          }}
+          onPointerLeave={() => setCursor(null)}
+          onWheel={(e) =>
             setRange({
               ...range,
-              cx: range.cx + d.start.x - p.x,
-              cy: range.cy + d.start.y - p.y,
-            });
-          } else {
-            const next = [...d.original];
-            next[d.i] = {
-              x: Math.max(-1000, Math.min(1000, p.x)),
-              y: Math.max(-1000, Math.min(1000, p.y)),
-            };
-            change(next);
+              span: Math.max(
+                0.1,
+                Math.min(2000, range.span * (e.deltaY > 0 ? 1.1 : 0.9)),
+              ),
+            })
           }
-        }}
-        onPointerUp={() => (drag.current = null)}
-        onPointerCancel={() => (drag.current = null)}
-        onPointerLeave={() => setCursor(null)}
-      >
-        <defs>
-          <clipPath id="plotClip">
-            <rect x={pad} y={pad} width={W - pad * 2} height={H - pad * 2} />
-          </clipPath>
-        </defs>
-        <rect width={W} height={H} fill="#141e19" rx="8" />
-        {ticks.map((x, i) => (
-          <g key={i}>
+        >
+          <defs>
+            <clipPath id={id}>
+              <rect x={pad} y={pad} width={W - 2 * pad} height={H - 2 * pad} />
+            </clipPath>
+          </defs>
+          <rect width={W} height={H} fill="#ffffff" />
+          {ticks.map((x, i) => (
+            <g key={i}>
+              <line
+                x1={sx(x)}
+                x2={sx(x)}
+                y1={pad}
+                y2={H - pad}
+                stroke="#edf1f5"
+              />
+              <text
+                x={sx(x)}
+                y={H - 13}
+                textAnchor="middle"
+                fill="#64748b"
+                fontSize="12"
+              >
+                {x.toFixed(range.span < 1 ? 2 : 1)}
+              </text>
+            </g>
+          ))}
+          {ys.map((y, i) => (
+            <g key={i}>
+              <line
+                x1={pad}
+                x2={W - pad}
+                y1={sy(y)}
+                y2={sy(y)}
+                stroke="#edf1f5"
+              />
+              <text
+                x={pad - 8}
+                y={sy(y) + 4}
+                textAnchor="end"
+                fill="#64748b"
+                fontSize="12"
+              >
+                {y.toFixed(range.span < 1 ? 2 : 1)}
+              </text>
+            </g>
+          ))}
+          <g clipPath={`url(#${id})`}>
             <line
-              x1={sx(x)}
-              x2={sx(x)}
+              x1={sx(0)}
+              x2={sx(0)}
               y1={pad}
               y2={H - pad}
-              stroke="#29372e"
-              strokeWidth="1"
+              stroke="#cbd5e1"
             />
-            <text
-              x={sx(x)}
-              y={H - 16}
-              fill="#8b9d91"
-              fontSize="11"
-              textAnchor="middle"
-            >
-              {x.toFixed(1)}
-            </text>
-          </g>
-        ))}
-        {yticks.map((y, i) => (
-          <g key={i}>
             <line
               x1={pad}
               x2={W - pad}
-              y1={sy(y)}
-              y2={sy(y)}
-              stroke="#29372e"
+              y1={sy(0)}
+              y2={sy(0)}
+              stroke="#cbd5e1"
             />
-            <text
-              x="29"
-              y={sy(y) + 4}
-              fill="#8b9d91"
-              fontSize="11"
-              textAnchor="end"
-            >
-              {y.toFixed(1)}
-            </text>
-          </g>
-        ))}
-        <g clipPath="url(#plotClip)">
-          <line x1={sx(0)} x2={sx(0)} y1={pad} y2={H - pad} stroke="#617367" />
-          <line x1={pad} x2={W - pad} y1={sy(0)} y2={sy(0)} stroke="#617367" />
-          <path
-            data-testid="prediction"
-            d={path}
-            fill="none"
-            stroke="#c6ed8b"
-            strokeWidth="2.5"
-          />
-          {data.map((p, i) => (
+            <path
+              data-testid="prediction"
+              d={path}
+              fill="none"
+              stroke="#2563eb"
+              strokeWidth="2.5"
+            />
+            {shown.map((p, i) => {
+              const validation = validationIndices.has(i);
+              return (
+                <circle
+                  key={i}
+                  data-testid="data-point"
+                  data-validation={validation}
+                  cx={sx(p.x)}
+                  cy={sy(p.y)}
+                  r={i === selected ? 6 : 4.3}
+                  fill={validation ? "#fff" : "#0d9488"}
+                  stroke={
+                    i === selected
+                      ? "#0f172a"
+                      : validation
+                        ? "#d97706"
+                        : "#087f73"
+                  }
+                  strokeWidth={i === selected ? 2.5 : 1.5}
+                >
+                  <title>
+                    {i + 1}: ({p.x.toFixed(4)}, {p.y.toFixed(4)}) ·{" "}
+                    {validation ? "검증" : "학습"}
+                  </title>
+                </circle>
+              );
+            })}
+            <line
+              x1={sx(input)}
+              x2={sx(input)}
+              y1={pad}
+              y2={H - pad}
+              stroke="#d97706"
+              strokeDasharray="5 5"
+            />
             <circle
-              key={i}
-              data-testid="data-point"
-              cx={sx(p.x)}
-              cy={sy(p.y)}
-              r={i === selected ? 6 : 4}
-              fill="#b798f2"
-              stroke={i === selected ? "#fff" : "#d8c7fa"}
-              strokeWidth={i === selected ? 2 : 1}
-            >
-              <title>
-                {i + 1}: ({p.x.toFixed(3)}, {p.y.toFixed(3)})
-              </title>
-            </circle>
-          ))}
-          <line
-            x1={sx(input)}
-            x2={sx(input)}
-            y1={pad}
-            y2={H - pad}
-            stroke="#dfb875"
-            strokeDasharray="4 5"
-          />
-          <circle
-            cx={sx(input)}
-            cy={sy(forward(model, input).y)}
-            r="6"
-            fill="#dfb875"
-            stroke="#141e19"
-            strokeWidth="2"
-          />
-        </g>
-        <text x={W - 22} y={H - 18} fill="#c6ed8b" fontSize="12">
-          x
-        </text>
-        <text x="20" y="24" fill="#c6ed8b" fontSize="12">
-          y
-        </text>
-      </svg>
-      <div className="plot-caption">
-        <span>
-          <i className="dot purple" />
-          학습 데이터 <i className="dot lime" />
-          모델 예측
-        </span>
-        <span className="mono">
-          {cursor
-            ? `x ${cursor.x.toFixed(2)} · y ${cursor.y.toFixed(2)}`
-            : "클릭으로 추가 · 드래그로 이동"}
-        </span>
+              cx={sx(input)}
+              cy={sy(forward(model, input).y)}
+              r="6"
+              fill="#d97706"
+              stroke="#fff"
+              strokeWidth="2"
+            />
+          </g>
+          <text x={W - 15} y={H - 13} fontSize="12" fill="#334155">
+            x
+          </text>
+          <text x="13" y="18" fontSize="12" fill="#334155">
+            y
+          </text>
+        </svg>
       </div>
-      <div className="input-inline">
-        <label htmlFor="probe-small">관찰 입력</label>
-        <input
-          id="probe-small"
-          type="range"
-          min="-5"
-          max="5"
-          step=".01"
-          value={input}
-          onChange={(e) => setInput(+e.target.value)}
-        />
-        <span className="mono">{input.toFixed(2)}</span>
+      <div className="graph-footer">
+        <div className="legend">
+          <span>
+            <i className="dot teal" />
+            학습
+          </span>
+          {validationIndices.size > 0 && (
+            <span>
+              <i className="dot hollow" />
+              검증
+            </span>
+          )}
+          <span>
+            <i className="line blue" />
+            예측
+          </span>
+          <span>
+            <i className="line amber" />
+            관찰
+          </span>
+        </div>
+        <span className="coordinate-hint">
+          {cursor
+            ? `(${cursor.x.toFixed(2)}, ${cursor.y.toFixed(2)})`
+            : mode === "edit"
+              ? "탭으로 추가 · 점을 눌러 편집"
+              : "드래그 이동 · 두 손가락 확대"}
+        </span>
       </div>
     </section>
   );
-}
+});

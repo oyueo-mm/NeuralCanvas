@@ -26,11 +26,9 @@ await page.waitForFunction(
     JSON.parse(localStorage.getItem("neuralcanvas-v1") ?? "{}").history
       ?.length > 0,
 );
-await page.getByRole("button", { name: "▷ 입력 순회", exact: true }).click();
+await page.getByRole("button", { name: "입력 순회", exact: true }).click();
 await page.waitForTimeout(200);
-await page
-  .getByRole("button", { name: "Ⅱ 순회 일시정지", exact: true })
-  .click();
+await page.getByRole("button", { name: "순회 일시정지", exact: true }).click();
 const workerHTTP = [];
 for (const workerURL of workers) {
   const r = await page.request.get(workerURL);

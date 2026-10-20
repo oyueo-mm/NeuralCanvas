@@ -8,6 +8,10 @@
 
 ![NeuralCanvas 실제 브라우저 실행 화면](docs/images/lab.png)
 
+## 새 작업 공간
+
+화이트 기반의 실험 화면에서 데이터와 신경망을 바로 확인합니다. 모바일은 데이터/신경망/분석 중 하나를 크게 표시하고 학습 도크를 항상 제공합니다. 데이터·모델 편집과 설정은 드로어/바텀시트에서 열며, 탭 전환과 패널 조작은 학습 상태를 유지합니다. [개편 전후 비교와 검증](docs/UI_REDESIGN.md)을 확인하세요.
+
 ## 주요 기능
 
 - 좌표평면 클릭으로 점 추가, 드래그 이동, 정확한 x/y 편집, 삭제, 실행 취소/다시 실행
@@ -18,7 +22,7 @@
 - Web Worker 학습, 일시정지/재개/정지, 한 배치 또는 한 Epoch 실행
 - 실제 Train/Validation MSE와 예측 곡선, 뉴런별 z/a, 연결별 기여량과 최근 기울기
 - 모델을 고정한 입력 순회: 왕복·반복·한 방향, 속도 조절, 수동 x 입력
-- 데이터/신경망 확대·축소 및 드래그 이동, 자동 화면 맞춤, 반응형 탭
+- 데이터/신경망 확대·축소, 두 손가락 핀치, 한 손가락 탐색, 화면 맞춤, 상태를 보존하는 반응형 탭
 - 실험 JSON 저장/복원, 브라우저 자동 저장, 데이터 CSV/JSON 가져오기, CSV·PNG 내보내기
 
 ## 실행
@@ -35,7 +39,7 @@ npm run dev
 ```bash
 npm test
 npm run build
-npx playwright install chromium webkit
+npx playwright install chromium webkit firefox
 npm run test:e2e
 npm run benchmark
 ```
@@ -51,6 +55,9 @@ React · TypeScript · Vite · Tailwind CSS · SVG · Canvas 2D(PNG 내보내기
 | `src/worker.ts` | 버전이 있는 명령·스냅샷, 타이머 학습 |
 | `src/Plot.tsx`, `src/Network.tsx` | 좌표계·예측 곡선·실제 신경망 시각화 |
 | `src/App.tsx` | 편집·학습 제어·입력 순회·분석 |
+| `src/useLab.ts` | 실험 상태·Worker 수명·자동 저장·입력 순회 |
+| `src/Panels.tsx`, `src/ui.tsx` | 편집 드로어·바텀시트·포커스·정밀도 입력 |
+| `src/Analysis.tsx`, `src/LossChart.tsx` | 분석 및 필요할 때 로드하는 손실 차트 |
 | `src/storage.ts` | 검증된 JSON 복원, CSV/PNG 다운로드 |
 | `src/*.test.ts`, `tests/lab.spec.ts` | 수학·학습·브라우저 검증 |
 
@@ -66,7 +73,7 @@ MSE는 **배치 평균**이며, 역전파는 `2(ŷ−y)/N`에서 시작합니다
 
 원본 좌표로 학습하며 자동 정규화는 적용하지 않습니다. 큰 입력·학습률에서는 발산할 수 있습니다. 실험 복원 시 행렬 크기·유한성·상한·버전을 검사하고, 코드를 실행하지 않습니다. 무한 손실 이력을 쌓지 않고 최근 1,000개 배치만 보존합니다.
 
-향후 확장: 터치 핀치, 선택 뉴런 중심 확대, 활성화 함수 그래프, 가중치 히스토그램, 정규화, 체크포인트, 2차원 분류·결정 경계, CNN, Gradient Flow 및 Optimizer 비교.
+향후 확장: 선택 뉴런 중심 확대, 활성화 함수 그래프, 가중치 히스토그램, 정규화, 체크포인트, 2차원 분류·결정 경계, CNN, Gradient Flow 및 Optimizer 비교.
 
 ## GitHub Pages
 

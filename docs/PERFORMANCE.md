@@ -1,5 +1,7 @@
 # 실제 성능 측정
 
+2026-10-21 UI 개편 전후의 같은 조건 비교는 [UI_REDESIGN.md](UI_REDESIGN.md#렌더링-성능)에 기록했습니다. 아래는 초기 버전의 측정 기록입니다. 현재 분석 차트는 지연 로드하며 기본 미리보기 포트는 4175입니다.
+
 2026-10-20 KST, Windows, Intel Core Ultra 7 256V, Node.js v24.19.0, Vitest 5.0.5. `npm test -- --reporter=verbose --silent=false --disableConsoleIntercept`에서 측정했습니다. 각 구성에서 200배치, 배치 크기 16, 검증 비율 0, Adam .01, 시드 42입니다. 모든 배치 후 전체 학습 MSE 계산 비용을 포함합니다. 첫 실행/JIT 비용과 병렬 테스트 간섭을 포함하므로 브라우저 성능 보장은 아닙니다.
 
 | 은닉 구조 | 데이터 수 | 200배치 시간 | 배치/초 |

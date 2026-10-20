@@ -134,7 +134,7 @@ export function exportSVG(svg: SVGSVGElement, name: string) {
     canvas.width = img.width * 2;
     canvas.height = img.height * 2;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#141e19";
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     canvas.toBlob((blob) => {
