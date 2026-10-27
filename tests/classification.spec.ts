@@ -1,19 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-const diagnostics = new WeakMap<Page, string[]>();
-async function saved(page: Page) {
-  await page.waitForTimeout(800);
-  return JSON.parse(
-    await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")!),
-  );
-}
-async function close(page: Page) {
-  await page.getByRole("button", { name: "패널 닫기" }).click();
-}
-async function tab(page: Page, name: string) {
-  const button = page.getByRole("tab", { name, exact: true });
-  if (await button.isVisible()) await button.click();
-}
+import {
+  closeDialog,
+  collectDiagnostics,
+  diagnostics,
+  leaveSide,
+  saved,
+  section,
+} from "./helpers";
 async function stroke(page: Page) {
   await page.getByRole("button", { name: "연속 그리기", exact: true }).click();
   const b = (await page.getByTestId("data-plot").boundingBox())!;
@@ -23,18 +17,7 @@ async function stroke(page: Page) {
   await page.mouse.up();
 }
 test.beforeEach(async ({ page }) => {
-  const errors: string[] = [];
-  diagnostics.set(page, errors);
-  page.on("pageerror", (e) => errors.push(e.message));
-  page.on("console", (m) => {
-    if (m.type() === "error") errors.push(m.text());
-  });
-  page.on("response", (r) => {
-    if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`);
-  });
-  page.on("requestfailed", (r) => {
-    if (!r.failure()?.errorText.includes("ERR_ABORTED")) errors.push(r.url());
-  });
+  collectDiagnostics(page);
   await page.goto("./");
 });
 test.afterEach(async ({ page }) => {
@@ -51,7 +34,7 @@ test("regression continuous drawing commits one reversible stroke", async ({
   expect((await saved(page)).data).toEqual(original);
   await page.getByRole("button", { name: "다시 실행", exact: true }).click();
   expect((await saved(page)).data.length).toBeGreaterThan(original.length + 5);
-  await close(page);
+  await closeDialog(page);
   const b = (await page.getByTestId("data-plot").boundingBox())!,
     count = await page.getByTestId("data-point").count();
   await page.mouse.move(b.x + 50, b.y + 95);
@@ -64,7 +47,7 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   page,
 }) => {
   const regression = await saved(page);
-  await page.getByRole("button", { name: /^분류 Classification/ }).click();
+  await page.getByRole("button", { name: "분류", exact: true }).click();
   await expect(page.getByTestId("data-point")).toHaveCount(100);
   await expect(page.getByTestId("decision-boundary")).toBeVisible();
   await page.getByRole("button", { name: "클래스 1", exact: true }).click();
@@ -112,12 +95,14 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
     ).toBe(true);
   }
   await page.getByRole("button", { name: "Two moons", exact: true }).click();
+  await closeDialog(page);
+  await section(page, "files");
   const csv = page.waitForEvent("download");
   await page.getByRole("button", { name: "CSV 내보내기", exact: true }).click();
   expect(await readFile((await (await csv).path())!, "utf8")).toMatch(
     /^x,y,label\n/,
   );
-  await close(page);
+  await leaveSide(page);
   await page.getByLabel("결정 경계 해상도").selectOption("24");
   await expect(page.getByTestId("decision-boundary")).toBeVisible();
   const initial = await page
@@ -155,19 +140,18 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   expect(
     await page.getByTestId("data-plot").getAttribute("data-boundary-updates"),
   ).toBe(updates);
-  await tab(page, "신경망");
+  await section(page, "network");
   await page.getByRole("button", { name: "뉴런 1-0", exact: true }).click();
   await expect(page.getByText(/ID l0n0 · layer 1 \/ index 0/)).toBeVisible();
   await expect(
     page.getByText("Incoming 활성 / 전체 · 평균 |w|", { exact: true }),
   ).toBeVisible();
-  await close(page);
-  await tab(page, "데이터");
-  await page.getByRole("button", { name: /^회귀 Regression/ }).click();
+  await leaveSide(page);
+  await page.getByRole("button", { name: "회귀", exact: true }).click();
   const restored = await saved(page);
   expect(restored.data).toEqual(regression.data);
   expect(restored.model).toEqual(regression.model);
-  await page.getByRole("button", { name: /^분류 Classification/ }).click();
+  await page.getByRole("button", { name: "분류", exact: true }).click();
   const resumed = await saved(page);
   expect(resumed.data).toEqual(state.data);
   expect(resumed.model).toEqual(state.model);
@@ -176,15 +160,14 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   expect((await saved(page)).model).toEqual(state.model);
   await page.getByRole("button", { name: "실험 메뉴 열기" }).click();
   const json = page.waitForEvent("download");
-  await page.getByRole("button", { name: "실험 저장 · JSON" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   const exported = JSON.parse(
     await readFile((await (await json).path())!, "utf8"),
   );
   expect(exported.version).toBe(2);
   expect(exported.task).toBe("classification");
   expect(exported.other.model).toEqual(regression.model);
-  await close(page);
-  await page.getByRole("button", { name: "데이터 편집", exact: true }).click();
+  await section(page, "files");
   const png = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "그래프 PNG 내보내기", exact: true })
@@ -192,10 +175,7 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   expect(
     (await readFile((await (await png).path())!)).subarray(1, 4).toString(),
   ).toBe("PNG");
-  await close(page);
-  await tab(page, "분석");
-  if (await page.getByRole("button", { name: /학습 분석/ }).isVisible())
-    await page.getByRole("button", { name: /학습 분석/ }).click();
+  await section(page, "analysis");
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.getByTestId("validation-accuracy")).toHaveText(/\d+\.\d+%/);
 });
@@ -209,7 +189,7 @@ for (const [width, height] of [
     page,
   }, info) => {
     await page.setViewportSize({ width, height });
-    await page.getByRole("button", { name: /^분류 Classification/ }).click();
+    await page.getByRole("button", { name: "분류", exact: true }).click();
     await expect(page.getByTestId("decision-boundary")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "클래스 1", exact: true }),
@@ -220,10 +200,9 @@ for (const [width, height] of [
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(width);
-    if (width <= 900)
-      expect(
-        await page.evaluate(() => document.documentElement.scrollHeight),
-      ).toBeLessThanOrEqual(height + 1);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight),
+    ).toBeLessThanOrEqual(height + 1);
     expect(
       (await page.getByTestId("data-plot").boundingBox())!.height,
     ).toBeGreaterThan(150);

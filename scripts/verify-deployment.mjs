@@ -33,7 +33,7 @@ await page.waitForTimeout(800);
 const regression = JSON.parse(
   await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")),
 );
-await page.getByRole("button", { name: /^분류 Classification/ }).click();
+await page.getByRole("button", { name: "분류", exact: true }).click();
 await expect(page.getByTestId("decision-boundary")).toBeVisible();
 await expect(page.getByTestId("data-point")).toHaveCount(100);
 await page.getByRole("button", { name: "한 스텝", exact: true }).click();
@@ -53,7 +53,7 @@ const boundary = {
     .getByTestId("data-plot")
     .getAttribute("data-boundary-ms"),
 };
-await page.getByRole("button", { name: /^회귀 Regression/ }).click();
+await page.getByRole("button", { name: "회귀", exact: true }).click();
 await page.waitForTimeout(800);
 const restored = JSON.parse(
   await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")),

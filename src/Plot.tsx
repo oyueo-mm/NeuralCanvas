@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent,
   type RefObject,
 } from "react";
@@ -14,9 +15,10 @@ import {
   type ClassDefinition,
 } from "./engine";
 import { useBoundary } from "./useBoundary";
-import { exportSVG } from "./storage";
+import { classStroke, palette } from "./theme";
 import { Icon, useElementSize } from "./ui";
 type Range = { cx: number; cy: number; span: number };
+type Mode = "edit" | "draw" | "pan" | "observe";
 type Props = {
   exportRef: RefObject<SVGSVGElement | null>;
   model: Model;
@@ -27,7 +29,6 @@ type Props = {
   classDefinitions: ClassDefinition[];
   setActiveClass: (c: 0 | 1) => void;
   resolution: number;
-  active: boolean;
   setResolution: (n: number) => void;
   observe: (x: number, y: number) => void;
   change: (p: Point[]) => void;
@@ -36,6 +37,29 @@ type Props = {
   edit: () => void;
   validationIndices: Set<number>;
 };
+// Plot margins leave room for tick labels without wasting canvas.
+const padL = 46,
+  padR = 26,
+  padT = 14,
+  padB = 30;
+function niceTicks(min: number, max: number, target: number) {
+  const raw = (max - min) / Math.max(1, target),
+    mag = 10 ** Math.floor(Math.log10(raw)),
+    n = raw / mag,
+    step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * mag,
+    ticks: number[] = [];
+  for (let v = Math.ceil(min / step - 1e-9) * step; v <= max + 1e-9; v += step)
+    ticks.push(Math.abs(v) < step * 1e-6 ? 0 : v);
+  return {
+    ticks,
+    decimals: Math.min(6, Math.max(0, -Math.floor(Math.log10(step)))),
+  };
+}
+const modes: { id: Mode; label: string; icon: string }[] = [
+  { id: "edit", label: "점 편집", icon: "cursor" },
+  { id: "draw", label: "연속 그리기", icon: "draw" },
+  { id: "pan", label: "탐색", icon: "pan" },
+];
 export const Plot = memo(function Plot({
   model,
   data,
@@ -47,7 +71,6 @@ export const Plot = memo(function Plot({
   resolution,
   setResolution,
   observe,
-  active,
   change,
   selected,
   select,
@@ -55,14 +78,15 @@ export const Plot = memo(function Plot({
   validationIndices,
   exportRef,
 }: Props) {
-  const [mode, setMode] = useState<"edit" | "draw" | "pan" | "observe">("edit"),
+  const [mode, setMode] = useState<Mode>("edit"),
     [range, setRange] = useState<Range>({ cx: 0, cy: 0, span: 10 }),
     [cursor, setCursor] = useState<Point | null>(null),
     [preview, setPreview] = useState<Point[] | null>(null);
   const { ref, width, height } = useElementSize(),
-    W = Math.max(280, width),
-    H = Math.max(200, height),
-    pad = 34,
+    W = Math.max(240, width),
+    H = Math.max(180, height),
+    iw = W - padL - padR,
+    ih = H - padT - padB,
     id = useId().replace(/:/g, "");
   const svg = useRef<SVGSVGElement>(null),
     pointers = useRef(new Map<number, { x: number; y: number }>()),
@@ -81,9 +105,9 @@ export const Plot = memo(function Plot({
     } | null>(null),
     draft = useRef<Point[] | null>(null);
   const sx = (x: number) =>
-      pad + ((x - range.cx + range.span / 2) / range.span) * (W - 2 * pad),
+      padL + ((x - range.cx + range.span / 2) / range.span) * iw,
     sy = (y: number) =>
-      H - pad - ((y - range.cy + range.span / 2) / range.span) * (H - 2 * pad);
+      padT + ih - ((y - range.cy + range.span / 2) / range.span) * ih;
   const local = (e: PointerEvent<SVGSVGElement>) => {
     const p = e.currentTarget.createSVGPoint();
     p.x = e.clientX;
@@ -91,15 +115,15 @@ export const Plot = memo(function Plot({
     return p.matrixTransform(e.currentTarget.getScreenCTM()!.inverse());
   };
   const math = (p: { x: number; y: number }, r = range) => ({
-    x: r.cx + ((p.x - pad) / (W - 2 * pad)) * r.span - r.span / 2,
-    y: r.cy + ((H - pad - p.y) / (H - 2 * pad)) * r.span - r.span / 2,
+    x: r.cx + ((p.x - padL) / iw) * r.span - r.span / 2,
+    y: r.cy + ((padT + ih - p.y) / ih) * r.span - r.span / 2,
   });
   const classification = model.task === "classification";
   const boundary = useBoundary(
     model,
     range,
     resolution,
-    classification && active,
+    classification,
     classes,
   );
   const visibleBoundary =
@@ -117,24 +141,25 @@ export const Plot = memo(function Plot({
         : Array.from({ length: 241 }, (_, i) => {
             const x = range.cx - range.span / 2 + (range.span * i) / 240,
               y = forward(model, x).y;
-            const px = pad + (i / 240) * (W - 2 * pad),
+            const px = padL + (i / 240) * iw,
               py =
-                H -
-                pad -
-                ((y - range.cy + range.span / 2) / range.span) * (H - 2 * pad);
+                padT + ih - ((y - range.cy + range.span / 2) / range.span) * ih;
             return `${i ? "L" : "M"}${px},${Math.max(-10000, Math.min(10000, py))}`;
           }).join(" "),
-    [model, range, W, H, classification],
+    [model, range, iw, ih, classification],
   );
-  const ticks = Array.from(
-      { length: 6 },
-      (_, i) => range.cx - range.span / 2 + (range.span * i) / 5,
+  const xTicks = niceTicks(
+      range.cx - range.span / 2,
+      range.cx + range.span / 2,
+      Math.max(3, Math.min(12, Math.round(iw / 90))),
     ),
-    ys = Array.from(
-      { length: 6 },
-      (_, i) => range.cy - range.span / 2 + (range.span * i) / 5,
+    yTicks = niceTicks(
+      range.cy - range.span / 2,
+      range.cy + range.span / 2,
+      Math.max(3, Math.min(10, Math.round(ih / 60))),
     ),
-    shown = preview ?? data;
+    shown = preview ?? data,
+    radius = Math.max(4, Math.min(6.5, 3.4 + Math.min(W, H) / 220));
   function fit() {
     const xs = data.map((p) => p.x),
       ys = data.map((p) => p.y);
@@ -219,10 +244,10 @@ export const Plot = memo(function Plot({
       setRange({
         cx:
           base.range.cx -
-          (((a.x + b.x) / 2 - base.mid.x) / (W - 2 * pad)) * base.range.span,
+          (((a.x + b.x) / 2 - base.mid.x) / iw) * base.range.span,
         cy:
           base.range.cy +
-          (((a.y + b.y) / 2 - base.mid.y) / (H - 2 * pad)) * base.range.span,
+          (((a.y + b.y) / 2 - base.mid.y) / ih) * base.range.span,
         span: Math.max(
           0.1,
           Math.min(2000, (base.range.span * base.distance) / d),
@@ -239,8 +264,8 @@ export const Plot = memo(function Plot({
     if (g.point === -2) {
       setRange({
         ...g.range,
-        cx: g.range.cx - ((p.x - g.start.x) / (W - 2 * pad)) * g.range.span,
-        cy: g.range.cy + ((p.y - g.start.y) / (H - 2 * pad)) * g.range.span,
+        cx: g.range.cx - ((p.x - g.start.x) / iw) * g.range.span,
+        cy: g.range.cy + ((p.y - g.start.y) / ih) * g.range.span,
       });
     } else if (
       g.point === -3 &&
@@ -249,10 +274,10 @@ export const Plot = memo(function Plot({
     ) {
       if (
         (draft.current?.length ?? data.length) < 2000 &&
-        p.x >= pad &&
-        p.x <= W - pad &&
-        p.y >= pad &&
-        p.y <= H - pad
+        p.x >= padL &&
+        p.x <= W - padR &&
+        p.y >= padT &&
+        p.y <= H - padB
       ) {
         const position = math(p, g.range);
         draft.current = [
@@ -309,119 +334,54 @@ export const Plot = memo(function Plot({
     draft.current = null;
     setPreview(null);
   }
+  const zoomBy = (factor: number) =>
+    setRange({
+      ...range,
+      span: Math.max(0.1, Math.min(2000, range.span * factor)),
+    });
+  const modeButtons = classification
+    ? [...modes, { id: "observe" as const, label: "좌표 관찰", icon: "probe" }]
+    : modes;
   return (
-    <section className="visual-panel plot-panel" aria-label="데이터 작업 공간">
-      <header className="visual-heading">
-        <h2>
-          <Icon name="data" />
-          {classification ? "데이터와 결정 경계" : "데이터와 예측"}{" "}
-          <span className="count">{data.length}개</span>
-        </h2>
-        <div className="heading-actions">
-          <button
-            className="icon-button"
-            aria-label="데이터 그래프 PNG"
-            onClick={() =>
-              svg.current && exportSVG(svg.current, "neuralcanvas-plot.png")
-            }
-          >
-            <Icon name="download" />
-          </button>
-          <button
-            className="subtle-button"
-            onClick={edit}
-            onPointerUp={(e) => {
-              if (e.pointerType === "touch") edit();
-            }}
-          >
-            <Icon name="edit" />
-            데이터 편집
-          </button>
+    <section className="plot-panel" aria-label="데이터 그래프">
+      <div className="plot-toolbar" role="toolbar" aria-label="그래프 도구">
+        <div className="tool-group" role="group" aria-label="데이터 조작 모드">
+          {modeButtons.map((m) => (
+            <button
+              key={m.id}
+              className="tool"
+              aria-label={m.label}
+              title={m.label}
+              aria-pressed={mode === m.id}
+              onClick={() => setMode(m.id)}
+            >
+              <Icon name={m.icon} />
+            </button>
+          ))}
         </div>
-      </header>
-      <div className="graph-toolbar">
-        <div className="segmented" aria-label="데이터 조작 모드">
-          <button
-            aria-pressed={mode === "edit"}
-            className={mode === "edit" ? "active" : ""}
-            onClick={() => setMode("edit")}
-          >
-            <Icon name="edit" />점 편집
-          </button>
-          <button
-            aria-pressed={mode === "draw"}
-            className={mode === "draw" ? "active" : ""}
-            onClick={() => setMode("draw")}
-          >
-            연속 그리기
-          </button>
-          <button
-            aria-pressed={mode === "pan"}
-            className={mode === "pan" ? "active" : ""}
-            onClick={() => setMode("pan")}
-          >
-            <Icon name="pan" />
-            탐색
-          </button>
-        </div>
-        <div className="button-group">
-          <button
-            className="icon-button"
-            aria-label="데이터 축소"
-            onClick={() =>
-              setRange({ ...range, span: Math.min(2000, range.span * 1.25) })
-            }
-          >
-            <Icon name="minus" />
-          </button>
-          <button
-            className="icon-button"
-            aria-label="데이터 확대"
-            onClick={() =>
-              setRange({ ...range, span: Math.max(0.1, range.span / 1.25) })
-            }
-          >
-            <Icon name="plus" />
-          </button>
-          <button
-            className="icon-button"
-            aria-label="데이터 화면 맞춤"
-            onPointerUp={(e) => {
-              if (e.pointerType === "touch") fit();
-            }}
-            title="데이터 화면 맞춤"
-            onClick={fit}
-          >
-            <Icon name="fit" />
-          </button>
-        </div>
-      </div>
-      {classification && (
-        <div className="classification-tools">
-          <div className="class-selector" role="group" aria-label="활성 클래스">
-            {classes.map((c) => (
-              <button
-                key={c.id}
-                aria-pressed={activeClass === c.id}
-                onClick={() => setActiveClass(c.id)}
-                style={{ "--class-color": c.color } as React.CSSProperties}
-              >
-                <i />
-                {c.name}
-              </button>
-            ))}
-          </div>
-          <button
-            className={mode === "observe" ? "selected" : ""}
-            aria-pressed={mode === "observe"}
-            onClick={() => setMode("observe")}
-          >
-            좌표 관찰
-          </button>
-          <label className="resolution-control">
-            격자
+        {classification && (
+          <>
+            <div
+              className="class-selector"
+              role="group"
+              aria-label="활성 클래스"
+            >
+              {classes.map((c) => (
+                <button
+                  key={c.id}
+                  aria-pressed={activeClass === c.id}
+                  onClick={() => setActiveClass(c.id)}
+                  style={{ "--class-color": c.color } as CSSProperties}
+                >
+                  <i />
+                  {c.name}
+                </button>
+              ))}
+            </div>
             <select
+              className="resolution-select"
               aria-label="결정 경계 해상도"
+              title="결정 경계 해상도"
               value={resolution}
               onChange={(e) => setResolution(+e.target.value)}
             >
@@ -431,9 +391,52 @@ export const Plot = memo(function Plot({
                 </option>
               ))}
             </select>
-          </label>
+          </>
+        )}
+        <span className="count" aria-label="데이터 개수">
+          {data.length}
+        </span>
+        <div className="tool-group tool-end">
+          <button
+            className="tool"
+            aria-label="데이터 축소"
+            title="축소"
+            onClick={() => zoomBy(1.25)}
+          >
+            <Icon name="minus" />
+          </button>
+          <button
+            className="tool"
+            aria-label="데이터 확대"
+            title="확대"
+            onClick={() => zoomBy(1 / 1.25)}
+          >
+            <Icon name="plus" />
+          </button>
+          <button
+            className="tool"
+            aria-label="데이터 화면 맞춤"
+            title="화면 맞춤"
+            onPointerUp={(e) => {
+              if (e.pointerType === "touch") fit();
+            }}
+            onClick={fit}
+          >
+            <Icon name="fit" />
+          </button>
+          <button
+            className="tool edit-data"
+            aria-label="데이터 편집"
+            title="데이터 편집"
+            onClick={edit}
+            onPointerUp={(e) => {
+              if (e.pointerType === "touch") edit();
+            }}
+          >
+            <Icon name="edit" />
+          </button>
         </div>
-      )}
+      </div>
       <div ref={ref} className="scene">
         <svg
           ref={(node) => {
@@ -466,71 +469,63 @@ export const Plot = memo(function Plot({
             setPreview(null);
           }}
           onPointerLeave={() => setCursor(null)}
-          onWheel={(e) =>
-            setRange({
-              ...range,
-              span: Math.max(
-                0.1,
-                Math.min(2000, range.span * (e.deltaY > 0 ? 1.1 : 0.9)),
-              ),
-            })
-          }
+          onWheel={(e) => zoomBy(e.deltaY > 0 ? 1.1 : 0.9)}
         >
           <defs>
             <clipPath id={id}>
-              <rect x={pad} y={pad} width={W - 2 * pad} height={H - 2 * pad} />
+              <rect x={padL} y={padT} width={iw} height={ih} />
             </clipPath>
           </defs>
-          <rect width={W} height={H} fill="#ffffff" />
+          <rect width={W} height={H} fill={palette.paper} />
           {classification && visibleBoundary && (
             <image
               pointerEvents="none"
               data-testid="decision-boundary"
               href={visibleBoundary.image}
-              x={pad}
-              y={pad}
-              width={W - 2 * pad}
-              height={H - 2 * pad}
+              x={padL}
+              y={padT}
+              width={iw}
+              height={ih}
               preserveAspectRatio="none"
             />
           )}
-          {ticks.map((x, i) => (
-            <g key={i}>
+          {xTicks.ticks.map((x) => (
+            <g key={x}>
               <line
                 x1={sx(x)}
                 x2={sx(x)}
-                y1={pad}
-                y2={H - pad}
-                stroke="#edf1f5"
+                y1={padT}
+                y2={padT + ih}
+                stroke={palette.grid}
               />
               <text
                 x={sx(x)}
-                y={H - 13}
+                y={H - 10}
                 textAnchor="middle"
-                fill="#64748b"
+                fill={palette.muted}
                 fontSize="12"
               >
-                {x.toFixed(range.span < 1 ? 2 : 1)}
+                {x.toFixed(xTicks.decimals)}
               </text>
             </g>
           ))}
-          {ys.map((y, i) => (
-            <g key={i}>
+          {yTicks.ticks.map((y) => (
+            <g key={y}>
               <line
-                x1={pad}
-                x2={W - pad}
+                x1={padL}
+                x2={padL + iw}
                 y1={sy(y)}
                 y2={sy(y)}
-                stroke="#edf1f5"
+                stroke={palette.grid}
               />
               <text
-                x={pad - 8}
+                x={padL - 8}
                 y={sy(y) + 4}
                 textAnchor="end"
-                fill="#64748b"
+                fill={palette.muted}
                 fontSize="12"
               >
-                {y.toFixed(range.span < 1 ? 2 : 1)}
+                {y.toFixed(yTicks.decimals)}
               </text>
             </g>
           ))}
@@ -538,24 +533,27 @@ export const Plot = memo(function Plot({
             <line
               x1={sx(0)}
               x2={sx(0)}
-              y1={pad}
-              y2={H - pad}
-              stroke="#cbd5e1"
+              y1={padT}
+              y2={padT + ih}
+              stroke={palette.axis}
+              strokeWidth="1.5"
             />
             <line
-              x1={pad}
-              x2={W - pad}
+              x1={padL}
+              x2={padL + iw}
               y1={sy(0)}
               y2={sy(0)}
-              stroke="#cbd5e1"
+              stroke={palette.axis}
+              strokeWidth="1.5"
             />
             {!classification && (
               <path
                 data-testid="prediction"
                 d={path}
                 fill="none"
-                stroke="#2563eb"
-                strokeWidth="2.5"
+                stroke={palette.sageDeep}
+                strokeWidth="2.75"
+                strokeLinejoin="round"
               />
             )}
             {classification && visibleBoundary && (
@@ -564,129 +562,144 @@ export const Plot = memo(function Plot({
                 d={visibleBoundary.contour
                   .map(
                     ([x, y, u, v]) =>
-                      `M${pad + x * (W - 2 * pad)},${pad + y * (H - 2 * pad)}L${pad + u * (W - 2 * pad)},${pad + v * (H - 2 * pad)}`,
+                      `M${padL + x * iw},${padT + y * ih}L${padL + u * iw},${padT + v * ih}`,
                   )
                   .join(" ")}
-                stroke="#475569"
-                strokeWidth="1.5"
-                strokeDasharray="4 3"
+                stroke={palette.ink}
+                strokeWidth="1.75"
+                strokeDasharray="5 3"
                 fill="none"
               />
             )}
             {shown.map((p, i) => {
-              const validation = validationIndices.has(i);
+              const validation = validationIndices.has(i),
+                chosen = i === selected;
               return (
-                <circle
-                  key={i}
-                  data-testid="data-point"
-                  data-validation={validation}
-                  data-class={p.label}
-                  cx={sx(p.x)}
-                  cy={sy(p.y)}
-                  r={i === selected ? 6 : 4.3}
-                  fill={
-                    classification
-                      ? classes[p.label ?? 0].color
-                      : validation
-                        ? "#fff"
-                        : "#0d9488"
-                  }
-                  stroke={
-                    i === selected
-                      ? "#0f172a"
-                      : classification
-                        ? "#fff"
+                <g key={i}>
+                  {classification && validation && (
+                    <circle
+                      cx={sx(p.x)}
+                      cy={sy(p.y)}
+                      r={radius + 3.4}
+                      fill="none"
+                      stroke={palette.ink}
+                      strokeWidth="1.5"
+                      strokeDasharray="2.5 2"
+                      pointerEvents="none"
+                    />
+                  )}
+                  <circle
+                    data-testid="data-point"
+                    data-validation={validation}
+                    data-class={p.label}
+                    cx={sx(p.x)}
+                    cy={sy(p.y)}
+                    r={chosen ? radius + 1.7 : radius}
+                    fill={
+                      classification
+                        ? classes[p.label ?? 0].color
                         : validation
-                          ? "#d97706"
-                          : "#087f73"
-                  }
-                  strokeWidth={i === selected ? 2.5 : 1.5}
-                >
-                  <title>
-                    {i + 1}: ({p.x.toFixed(4)}, {p.y.toFixed(4)}) ·{" "}
-                    {classification ? `${classes[p.label ?? 0].name} · ` : ""}
-                    {validation ? "검증" : "학습"}
-                  </title>
-                </circle>
+                          ? palette.pink
+                          : palette.sage
+                    }
+                    stroke={
+                      chosen
+                        ? palette.ink
+                        : classification
+                          ? classStroke[p.label ?? 0]
+                          : validation
+                            ? palette.rose
+                            : palette.sageDeep
+                    }
+                    strokeWidth={chosen ? 2.75 : validation ? 2 : 1.5}
+                  >
+                    <title>
+                      {i + 1}: ({p.x.toFixed(4)}, {p.y.toFixed(4)}) ·{" "}
+                      {classification ? `${classes[p.label ?? 0].name} · ` : ""}
+                      {validation ? "검증" : "학습"}
+                    </title>
+                  </circle>
+                </g>
               );
             })}
             {!classification && (
               <line
                 x1={sx(input)}
                 x2={sx(input)}
-                y1={pad}
-                y2={H - pad}
-                stroke="#d97706"
+                y1={padT}
+                y2={padT + ih}
+                stroke={palette.ink}
+                strokeWidth="1.25"
                 strokeDasharray="5 5"
               />
             )}
             <circle
               cx={sx(input)}
               cy={sy(classification ? input2 : forward(model, input).y)}
-              r="6"
-              fill="#d97706"
-              stroke="#fff"
+              r={radius + 1.5}
+              fill={palette.ink}
+              stroke={palette.ivory}
               strokeWidth="2"
             />
           </g>
-          <text x={W - 15} y={H - 13} fontSize="12" fill="#334155">
+          <text
+            x={W - 8}
+            y={H - 10}
+            textAnchor="end"
+            fontSize="12"
+            fill={palette.ink}
+          >
             {classification ? "x₁" : "x"}
           </text>
-          <text x="13" y="18" fontSize="12" fill="#334155">
+          <text x={6} y={12} fontSize="12" fill={palette.ink}>
             {classification ? "x₂" : "y"}
           </text>
         </svg>
       </div>
-      <div className="graph-footer">
+      <div className="plot-footer">
         {classification ? (
-          <div className="legend boundary-legend">
+          <div className="legend">
             <span>P(1)</span>
             <i
               className="probability-scale"
               style={{
-                background: `linear-gradient(90deg, ${classes[0].color}33, ${classes[1].color}33)`,
+                background: `linear-gradient(90deg, ${classes[0].color}, ${classes[1].color})`,
               }}
             />
-            <span>0 → 1</span>
-            <span>┄ p = 0.5</span>
-            <span className="boundary-timing">
-              {boundary
-                ? `${boundary.grid.milliseconds.toFixed(0)} ms`
-                : "계산 중"}
+            <span>
+              <i className="line contour" />p = 0.5
             </span>
+            {validationIndices.size > 0 && (
+              <span>
+                <i className="dot validation-ring" />
+                검증
+              </span>
+            )}
           </div>
         ) : (
           <div className="legend">
             <span>
-              <i className="dot teal" />
+              <i className="dot train" />
               학습
             </span>
             {validationIndices.size > 0 && (
               <span>
-                <i className="dot hollow" />
+                <i className="dot validation" />
                 검증
               </span>
             )}
             <span>
-              <i className="line blue" />
+              <i className="line prediction" />
               예측
             </span>
             <span>
-              <i className="line amber" />
+              <i className="line probe" />
               관찰
             </span>
           </div>
         )}
-        <span className="coordinate-hint">
-          {cursor
-            ? `(${cursor.x.toFixed(2)}, ${cursor.y.toFixed(2)})`
-            : mode === "draw"
-              ? "드래그로 추가 · 한 번에 실행 취소"
-              : mode === "observe"
-                ? "탭·드래그로 확률 관찰"
-                : mode === "edit"
-                  ? "탭으로 추가 · 점을 눌러 편집"
-                  : "드래그 이동 · 두 손가락 확대"}
+        <span className="coordinate-hint" aria-hidden="true">
+          {cursor ? `(${cursor.x.toFixed(2)}, ${cursor.y.toFixed(2)})` : ""}
         </span>
       </div>
     </section>

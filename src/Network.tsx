@@ -7,7 +7,7 @@ import {
   type RefObject,
 } from "react";
 import { forward, type Model, type Gradients } from "./engine";
-import { exportSVG } from "./storage";
+import { palette } from "./theme";
 import { Icon, useElementSize } from "./ui";
 export type Selection =
   | { type: "edge"; l: number; j: number; i: number }
@@ -22,7 +22,8 @@ export const Network = memo(function Network({
   gradient,
   playing,
   phase,
-  edit,
+  expanded,
+  onExpand,
   exportRef,
 }: {
   model: Model;
@@ -33,7 +34,8 @@ export const Network = memo(function Network({
   gradient?: Gradients;
   playing: boolean;
   phase: number;
-  edit: () => void;
+  expanded: boolean;
+  onExpand: () => void;
   exportRef: RefObject<SVGSVGElement | null>;
 }) {
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 }),
@@ -65,7 +67,7 @@ export const Network = memo(function Network({
       model.task === "classification" ? 2 : 1,
       ...model.layers.map((l) => l.b.length),
     ],
-    worldW = Math.max(W, (sizes.length - 1) * 150 + 100),
+    worldW = Math.max(W, (sizes.length - 1) * 120 + 100),
     worldH = Math.max(H, (Math.max(...sizes) - 1) * 60 + 120),
     fitScale = Math.min(W / worldW, H / worldH),
     radius = 20,
@@ -157,57 +159,47 @@ export const Network = memo(function Network({
     gesture.current = null;
   }
   return (
-    <section
-      className="visual-panel network-panel"
-      aria-label="신경망 작업 공간"
-    >
-      <header className="visual-heading">
-        <h2>
-          <Icon name="network" />
-          신경망 <span className="count">{sizes.join(" → ")}</span>
-        </h2>
-        <div className="heading-actions">
+    <section className="network-panel" aria-label="신경망">
+      <div className="network-toolbar" role="toolbar" aria-label="신경망 도구">
+        <span className="count" aria-label="층 구조">
+          {sizes.join(" → ")}
+        </span>
+        <div className="tool-group tool-end">
           <button
-            className="icon-button"
-            aria-label="신경망 PNG"
-            onClick={() =>
-              svg.current && exportSVG(svg.current, "neuralcanvas-network.png")
-            }
-          >
-            <Icon name="download" />
-          </button>
-          <button className="subtle-button" onClick={edit}>
-            <Icon name="edit" />
-            모델 편집
-          </button>
-        </div>
-      </header>
-      <div className="graph-toolbar">
-        <span className="graph-hint">뉴런·연결을 눌러 편집</span>
-        <div className="button-group">
-          <button
-            className="icon-button"
+            className="tool"
             aria-label="신경망 축소"
+            title="축소"
             onClick={() => zoom(1 / 1.2)}
           >
             <Icon name="minus" />
           </button>
           <button
-            className="icon-button"
+            className="tool"
             aria-label="신경망 확대"
+            title="확대"
             onClick={() => zoom(1.2)}
           >
             <Icon name="plus" />
           </button>
           <button
-            className="icon-button"
+            className="tool"
             aria-label="신경망 화면 맞춤"
+            title="화면 맞춤"
             onPointerUp={(e) => {
               if (e.pointerType === "touch") setView({ zoom: 1, x: 0, y: 0 });
             }}
             onClick={() => setView({ zoom: 1, x: 0, y: 0 })}
           >
             <Icon name="fit" />
+          </button>
+          <button
+            className="tool"
+            aria-label={expanded ? "신경망 확대 보기 닫기" : "신경망 확대 보기"}
+            title={expanded ? "확대 보기 닫기" : "확대 보기"}
+            aria-pressed={expanded}
+            onClick={onExpand}
+          >
+            <Icon name={expanded ? "collapse" : "expand"} />
           </button>
         </div>
       </div>
@@ -233,7 +225,12 @@ export const Network = memo(function Network({
             pinch.current = null;
           }}
         >
-          <rect width={W} height={H} fill="#fff" pointerEvents="none" />
+          <rect
+            width={W}
+            height={H}
+            fill={palette.paper}
+            pointerEvents="none"
+          />
           <g
             transform={`translate(${W / 2 + view.x} ${H / 2 + view.y}) scale(${view.zoom * fitScale}) translate(${-worldW / 2} ${-worldH / 2})`}
             data-testid="network-transform"
@@ -273,14 +270,14 @@ export const Network = memo(function Network({
                         y2={b.y}
                         stroke={
                           chosen
-                            ? "#0f172a"
+                            ? palette.ink
                             : !enabled
-                              ? "#94a3b8"
+                              ? palette.disabled
                               : w >= 0
-                                ? "#3b82f6"
-                                : "#d97706"
+                                ? palette.sageDeep
+                                : palette.rose
                         }
-                        strokeOpacity={chosen ? 1 : enabled ? 0.5 : 0.5}
+                        strokeOpacity={chosen ? 1 : enabled ? 0.6 : 0.7}
                         strokeWidth={
                           chosen ? 3 : Math.min(3.5, 0.6 + Math.abs(w))
                         }
@@ -307,7 +304,7 @@ export const Network = memo(function Network({
                   x={pos(l, 0).x}
                   y="20"
                   textAnchor="middle"
-                  fill="#64748b"
+                  fill={palette.muted}
                   fontSize="11"
                 >
                   {l === 0
@@ -355,25 +352,32 @@ export const Network = memo(function Network({
                         cy={p.y}
                         r={radius}
                         fill={
-                          chosen ? "#dbeafe" : a >= 0 ? "#eff6ff" : "#fff7ed"
+                          chosen ? palette.pink : a >= 0 ? "#EEF3EA" : "#FBF3F6"
                         }
                         stroke={
                           chosen
-                            ? "#1d4ed8"
-                            : playing && phase === l
-                              ? "#0d9488"
-                              : a >= 0
-                                ? "#60a5fa"
-                                : "#f59e0b"
+                            ? palette.ink
+                            : a >= 0
+                              ? palette.sageDeep
+                              : palette.rose
                         }
-                        strokeWidth={
-                          chosen || (playing && phase === l) ? 2.5 : 1.5
-                        }
+                        strokeWidth={chosen ? 3 : 1.75}
                       />
+                      {playing && phase === l && (
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={radius + 5}
+                          fill="none"
+                          stroke={palette.sage}
+                          strokeWidth="3"
+                          pointerEvents="none"
+                        />
+                      )}
                       <text
                         x={p.x}
                         y={p.y + 3.5}
-                        fill="#1e293b"
+                        fill={palette.ink}
                         fontSize={radius < 14 ? "8" : "10"}
                         textAnchor="middle"
                         fontFamily="ui-monospace,monospace"
@@ -398,7 +402,7 @@ export const Network = memo(function Network({
                 <text
                   x={pos(l, 0).x}
                   y={worldH - 20}
-                  fill="#64748b"
+                  fill={palette.muted}
                   fontSize="11"
                   textAnchor="middle"
                 >
@@ -413,24 +417,20 @@ export const Network = memo(function Network({
           </g>
         </svg>
       </div>
-      <div className="graph-footer">
+      <div className="plot-footer">
         <div className="legend">
           <span>
-            <i className="line blue" />
-            양수 (+)
+            <i className="line positive" />+
           </span>
           <span>
-            <i className="line negative" />
-            음수 (−)
+            <i className="line negative" />−
           </span>
           <span>
             <i className="line disabled" />
             비활성
           </span>
         </div>
-        <span className="coordinate-hint">
-          {Math.round(view.zoom * 100)}% · 드래그로 이동
-        </span>
+        <span className="coordinate-hint">{Math.round(view.zoom * 100)}%</span>
       </div>
     </section>
   );

@@ -61,7 +61,9 @@ export function useBoundary(
           image = ctx.createImageData(n, n);
         const colors = latest.classes.map((c) =>
           [1, 3, 5].map(
-            (k) => 255 * 0.8 + parseInt(c.color.slice(k, k + 2), 16) * 0.2,
+            (k, i) =>
+              [253, 250, 244][i] * 0.7 +
+              parseInt(c.color.slice(k, k + 2), 16) * 0.3,
           ),
         );
         for (let j = 0; j < n; j++)

@@ -10,7 +10,7 @@ test("classification touch stroke, undo, point move and bottom sheet", async ({
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("./");
-  await page.getByRole("button", { name: /^분류 Classification/ }).tap();
+  await page.getByRole("button", { name: "분류", exact: true }).tap();
   await page.getByRole("button", { name: "클래스 1", exact: true }).tap();
   await page.getByRole("button", { name: "연속 그리기", exact: true }).tap();
   const b = (await page.getByTestId("data-plot").boundingBox())!,
@@ -62,7 +62,7 @@ test("classification touch stroke, undo, point move and bottom sheet", async ({
   await expect(page.getByTestId("decision-boundary")).toBeVisible();
   expect(errors).toEqual([]);
 });
-test("touch pinch, pan, selection, tab retention and keyboard-sized viewport", async ({
+test("touch pinch, pan, drawer retention and keyboard-sized viewport", async ({
   page,
   browserName,
 }, info) => {
@@ -112,7 +112,10 @@ test("touch pinch, pan, selection, tab retention and keyboard-sized viewport", a
       await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")!),
     ).data,
   ).toEqual(saved.data);
-  await page.getByRole("tab", { name: "신경망", exact: true }).tap();
+  const toggle = page.locator(".sidebar-toggle");
+  await toggle.tap();
+  await expect(page.getByTestId("network")).toBeVisible();
+  await page.waitForTimeout(400);
   await pinch("network");
   expect(
     Number(await page.getByTestId("network").getAttribute("data-zoom")),
@@ -139,16 +142,16 @@ test("touch pinch, pan, selection, tab retention and keyboard-sized viewport", a
   await page.getByRole("button", { name: "신경망 화면 맞춤" }).tap();
   await expect(page.getByTestId("network")).toHaveAttribute("data-zoom", "1");
   await page.getByRole("button", { name: "뉴런 1-0", exact: true }).tap();
-  await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByLabel("편향", { exact: true }).fill(".125");
   await page.setViewportSize({ width: 390, height: 480 });
+  await page.getByLabel("편향", { exact: true }).scrollIntoViewIfNeeded();
   await expect(page.getByLabel("편향", { exact: true })).toBeInViewport({
     ratio: 1,
   });
-  await page.getByRole("button", { name: "패널 닫기" }).tap();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("tab", { name: "데이터", exact: true }).tap();
-  await page.getByRole("tab", { name: "신경망", exact: true }).tap();
+  await toggle.tap();
+  await expect(page.locator("#sidebar")).toBeHidden();
+  await toggle.tap();
   await expect(page.getByTestId("network")).toHaveAttribute("data-zoom", "1");
   await expect(
     page.getByRole("button", { name: "뉴런 1-0", exact: true }),
@@ -161,7 +164,8 @@ test("touch pinch, pan, selection, tab retention and keyboard-sized viewport", a
   expect(after.model.layers[0].b[0]).toBe(0.125);
   expect(after.model.layers[0].w).toEqual(saved.model.layers[0].w);
   await page.screenshot({ path: "test-results/mobile-network.png" });
-  await page.getByRole("tab", { name: "데이터", exact: true }).tap();
+  await toggle.tap();
+  await expect(page.locator("#sidebar")).toBeHidden();
   await page.getByRole("button", { name: "데이터 화면 맞춤" }).tap();
   await page.getByTestId("data-point").nth(10).tap();
   await expect(page.getByRole("dialog")).toBeVisible();

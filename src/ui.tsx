@@ -81,6 +81,7 @@ export function Drawer({
 }) {
   const dialog = useRef<HTMLDialogElement>(null),
     id = useId(),
+    pressed = useRef(false),
     closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
@@ -100,6 +101,15 @@ export function Drawer({
       ref={dialog}
       className="drawer"
       aria-labelledby={id}
+      onPointerDownCapture={() => (pressed.current = true)}
+      // A touch that opened this drawer is followed by a synthesized click at the same
+      // spot. It has no pointerdown inside the drawer, so it must not activate anything.
+      onClickCapture={(e) => {
+        if (e.detail > 0 && !pressed.current) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      }}
       onCancel={(e) => {
         e.preventDefault();
         closeRef.current();
@@ -212,7 +222,25 @@ export function Icon({ name }: { name: string }) {
         <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" />
       </>
     ),
-    stop: <rect x="6" y="6" width="12" height="12" />,
+    stop: <rect x="6" y="6" width="12" height="12" rx="1" />,
+    epoch: <path d="m4 5 8 7-8 7ZM12 5l8 7-8 7Z" />,
+    cursor: <path d="m5 3 14 8-6.5 2L10 19.5Z" />,
+    draw: <path d="M3 16c3-9 5-9 7-4s4 5 7-4c1.5-3.5 2.5-3 4-2" />,
+    probe: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 3v4M12 17v4M3 12h4M17 12h4" />
+      </>
+    ),
+    sidebar: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M15 4v16" />
+      </>
+    ),
+    expand: <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />,
+    collapse: <path d="M21 9h-6V3M3 15h6v6M15 9l6-6M9 15l-6 6" />,
+    down: <path d="m6 9 6 6 6-6" />,
     chevron: <path d="m8 5 7 7-7 7" />,
     help: (
       <>

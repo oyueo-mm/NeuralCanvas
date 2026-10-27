@@ -53,7 +53,7 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
             l.setPoint(e.target.value === "" ? null : +e.target.value)
           }
         >
-          <option value="">점을 선택하세요</option>
+          <option value="">선택 안 함</option>
           {l.data.map((p, i) => (
             <option key={i} value={i}>
               {i + 1}번 · ({format(p.x, 4)}, {format(p.y, 4)})
@@ -122,13 +122,6 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
                   </select>
                 </label>
               )}
-              <details className="precision">
-                <summary>전체 정밀도 보기</summary>
-                <code>
-                  x = {l.data[l.point].x}
-                  <br />y = {l.data[l.point].y}
-                </code>
-              </details>
               <button
                 className="danger wide"
                 onClick={() => {
@@ -140,9 +133,7 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
               </button>
             </>
           ) : (
-            <p className="muted">
-              그래프의 점을 누르면 좌표를 수정하거나 삭제할 수 있습니다.
-            </p>
+            <p className="muted">점을 선택하세요.</p>
           )}
         </section>
       )}
@@ -187,52 +178,15 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
         프리셋 다시 생성
       </button>
 
-      <section className="editor-section">
-        <h3>가져오기 · 내보내기</h3>
-        <div className="button-row">
-          <button onClick={() => l.datasetFile.current?.click()}>
-            CSV / JSON 가져오기
-          </button>
-          <button
-            onClick={() =>
-              download(
-                "dataset.csv",
-                (l.task === "classification" ? "x,y,label\n" : "x,y\n") +
-                  l.data
-                    .map(
-                      (p) =>
-                        `${p.x},${p.y}${l.task === "classification" ? `,${p.label}` : ""}`,
-                    )
-                    .join("\n"),
-                "text/csv",
-              )
-            }
-          >
-            CSV 내보내기
-          </button>
-          <button
-            onClick={() =>
-              l.plotSVG.current &&
-              exportSVG(l.plotSVG.current, "neuralcanvas-plot.png")
-            }
-          >
-            그래프 PNG 내보내기
-          </button>
-        </div>
-        <button
-          className="text-button danger"
-          onClick={() => {
-            l.changeData([]);
-            l.setPoint(null);
-          }}
-        >
-          전체 삭제
-        </button>
-        <p className="caption">
-          최대 2,000개 점 · 원본 좌표로 학습합니다. 수정 시 학습 이력이
-          초기화됩니다.
-        </p>
-      </section>
+      <button
+        className="wide danger"
+        onClick={() => {
+          l.changeData([]);
+          l.setPoint(null);
+        }}
+      >
+        전체 삭제
+      </button>
     </>
   );
 }
@@ -246,7 +200,7 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
   return (
     <>
       <label className="field">
-        <span>뉴런 또는 연결 선택</span>
+        <span>선택</span>
         <select
           aria-label="편집 대상"
           value={value}
@@ -478,7 +432,7 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
       <section className="editor-section">
         <h3>네트워크 구조</h3>
         <div className="layer-row input-row">
-          <span>입력층</span>
+          <span className="layer-name">입력층</span>
           <span className="count">
             {l.task === "classification" ? "2 뉴런 · x₁, x₂" : "1 뉴런 · x"}
           </span>
@@ -486,7 +440,7 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
         {l.hidden.map((layer, k) => (
           <div className="layer-config" key={layer.id}>
             <div className="layer-row">
-              <strong>은닉층 {k + 1}</strong>
+              <strong className="layer-name">은닉층 {k + 1}</strong>
               <div className="stepper">
                 <button
                   className="icon-button"
@@ -516,22 +470,8 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
                   <Icon name="plus" />
                 </button>
               </div>
-              <button
-                className="icon-button danger"
-                aria-label={`은닉층 ${k + 1} 삭제`}
-                onClick={() =>
-                  l.resize(
-                    l.sizes.filter((_, i) => i !== k),
-                    l.acts.filter((_, i) => i !== k),
-                  )
-                }
-              >
-                <Icon name="close" />
-              </button>
-            </div>
-            <label className="field inline-field">
-              <span>활성화</span>
               <select
+                className="act-select"
                 aria-label={`은닉층 ${k + 1} 활성화`}
                 value={layer.activation}
                 onChange={(e) =>
@@ -545,11 +485,23 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
                   <option key={a}>{a}</option>
                 ))}
               </select>
-            </label>
+              <button
+                className="icon-button danger"
+                aria-label={`은닉층 ${k + 1} 삭제`}
+                onClick={() =>
+                  l.resize(
+                    l.sizes.filter((_, i) => i !== k),
+                    l.acts.filter((_, i) => i !== k),
+                  )
+                }
+              >
+                <Icon name="close" />
+              </button>
+            </div>
           </div>
         ))}
         <div className="layer-row input-row">
-          <span>출력층</span>
+          <span className="layer-name">출력층</span>
           <span className="count">
             1 뉴런 · {l.model.layers.at(-1)!.activation}
           </span>
@@ -557,28 +509,16 @@ export function ModelEditor({ lab: l }: { lab: Lab }) {
         <button
           className="wide add-layer"
           disabled={l.hidden.length >= 4}
+          title="최대 4개 층 · 층 추가·삭제는 가중치를 초기화합니다"
           onClick={() => l.resize([...l.sizes, 4], [...l.acts, "tanh"])}
         >
           <Icon name="plus" />
           은닉층 추가
         </button>
-        <p className="caption">
-          최대 4개 은닉층, 층당 16개 뉴런. 층 추가·삭제는 전체 가중치를
-          초기화합니다. 뉴런 수 변경은 기존 연결을 유지합니다.
-        </p>
       </section>
       <button className="danger wide" onClick={() => l.resetModel()}>
         <Icon name="reset" />
         가중치·학습 이력 초기화
-      </button>
-      <button
-        className="wide"
-        onClick={() =>
-          l.networkSVG.current &&
-          exportSVG(l.networkSVG.current, "neuralcanvas-network.png")
-        }
-      >
-        신경망 PNG 내보내기
       </button>
     </>
   );
@@ -588,9 +528,6 @@ export function TrainingSettings({ lab: l }: { lab: Lab }) {
     l.changeSettings({ ...l.settings, [key]: value });
   return (
     <>
-      <p className="caption intro-caption">
-        설정 변경 시 현재 학습 세션이 초기화됩니다. 가중치는 유지됩니다.
-      </p>
       <div className="form-grid">
         <label className="field">
           <span>Optimizer</span>
@@ -627,8 +564,8 @@ export function TrainingSettings({ lab: l }: { lab: Lab }) {
           onChange={(v) => change("epochs", v)}
         />
       </div>
-      <label className="slider-label">
-        학습률 · 로그 스케일
+      <div className="slider-label">
+        <span>학습률 (log)</span>
         <input
           aria-label="로그 학습률"
           type="range"
@@ -638,9 +575,22 @@ export function TrainingSettings({ lab: l }: { lab: Lab }) {
           value={Math.log10(l.settings.lr)}
           onChange={(e) => change("lr", 10 ** +e.target.value)}
         />
-      </label>
-      <details className="editor-section advanced">
-        <summary>고급 설정</summary>
+      </div>
+      <div className="slider-label">
+        <span title="한 번에 처리하는 배치 수">
+          학습 속도 <b>{l.settings.speed}</b>
+        </span>
+        <input
+          aria-label="학습 속도"
+          type="range"
+          min="1"
+          max="100"
+          value={l.settings.speed}
+          onChange={(e) => change("speed", +e.target.value)}
+        />
+      </div>
+      <details className="advanced">
+        <summary>고급</summary>
         <div className="form-grid">
           <NumberField
             label="시드"
@@ -665,66 +615,92 @@ export function TrainingSettings({ lab: l }: { lab: Lab }) {
             onChange={(v) => change("clip", v)}
           />
         </div>
-        <label className="slider-label">
-          학습 속도 · 최대 {l.settings.speed} 배치 / 갱신
-          <input
-            aria-label="학습 속도"
-            type="range"
-            min="1"
-            max="100"
-            value={l.settings.speed}
-            onChange={(e) => change("speed", +e.target.value)}
-          />
-        </label>
-        <p className="caption">
-          학습 속도는 한 번에 처리하는 연산량이며, 학습률은 가중치 업데이트의
-          크기입니다.
-        </p>
       </details>
-      <details className="editor-section advanced">
+      <details className="advanced">
         <summary>가중치 초기화</summary>
-        <p className="caption">
-          선택한 방식으로 가중치와 학습 이력을 초기화합니다.
-        </p>
         <div className="button-row">
           {(["xavier", "he", "zero"] as const).map((init) => (
-            <button key={init} onClick={() => l.resetModel(init)}>
+            <button
+              key={init}
+              title={
+                init === "zero"
+                  ? "은닉 뉴런의 대칭성 때문에 학습이 제한됩니다"
+                  : undefined
+              }
+              onClick={() => l.resetModel(init)}
+            >
               {init}
             </button>
           ))}
         </div>
-        <p className="caption">
-          Zero 초기화는 은닉 뉴런의 대칭성 때문에 학습이 제한될 수 있습니다.
-        </p>
       </details>
     </>
   );
 }
-export function ObservationSettings({ lab: l }: { lab: Lab }) {
+export function ObservationPanel({ lab: l }: { lab: Lab }) {
+  const classification = l.task === "classification";
   return (
     <>
-      <p className="muted">
-        모델의 가중치를 고정하고 입력이 각 층을 거치는 과정을 관찰합니다.
-        {l.task === "classification" &&
-          " 데이터 화면의 좌표 관찰로 두 입력을 함께 바꿀 수 있습니다."}
-      </p>
-      <div className="form-grid">
-        <NumberField
-          label="입력 x"
+      <div className="observe-head">
+        <button
+          className={`observation-play ${l.playing ? "observing" : ""}`}
+          aria-label={l.playing ? "순회 일시정지" : "입력 순회"}
+          title="가중치를 고정하고 입력을 관찰합니다"
+          disabled={l.running}
+          onClick={() => {
+            l.direction.current = 1;
+            l.setPlaying(!l.playing);
+          }}
+        >
+          <Icon name={l.playing ? "pause" : "play"} />
+          {l.playing ? "순회 중" : "순회"}
+        </button>
+        <span className="probe-output">
+          {classification ? (
+            <>
+              C{Number(l.f.y >= 0.5)}{" "}
+              <strong data-testid="probability">
+                {((l.f.y >= 0.5 ? l.f.y : 1 - l.f.y) * 100).toFixed(1)}%
+              </strong>
+            </>
+          ) : (
+            <>
+              ŷ <strong>{format(l.f.y, 4)}</strong>
+            </>
+          )}
+        </span>
+      </div>
+      <label className="probe-slider">
+        <span>
+          {classification ? "x₁" : "x"} <b>{l.input.toFixed(2)}</b>
+        </span>
+        <input
+          aria-label="관찰 입력 x"
+          type="range"
+          min="-5"
+          max="5"
+          step=".01"
           value={l.input}
-          min={-5}
-          max={5}
-          onChange={l.setInput}
+          onChange={(e) => l.setInput(+e.target.value)}
         />
-        {l.task === "classification" && (
-          <NumberField
-            label="입력 x2"
+      </label>
+      {classification && (
+        <label className="probe-slider">
+          <span>
+            x₂ <b>{l.input2.toFixed(2)}</b>
+          </span>
+          <input
+            aria-label="관찰 입력 x2"
+            type="range"
+            min="-5"
+            max="5"
+            step=".01"
             value={l.input2}
-            min={-1000}
-            max={1000}
-            onChange={l.setInput2}
+            onChange={(e) => l.setInput2(+e.target.value)}
           />
-        )}
+        </label>
+      )}
+      <div className="form-grid">
         <NumberField
           label="순회 속도"
           value={l.sweepSpeed}
@@ -739,26 +715,99 @@ export function ObservationSettings({ lab: l }: { lab: Lab }) {
             value={l.sweepMode}
             onChange={(e) => l.setSweepMode(e.target.value)}
           >
-            {["왕복", "반복", "한 방향"].map((s) => (
-              <option key={s}>{s}</option>
+            {["왕복", "반복", "한 방향"].map((m) => (
+              <option key={m}>{m}</option>
             ))}
           </select>
         </label>
       </div>
-      <dl className="detail-list">
-        <div>
-          <dt>현재 입력 x</dt>
-          <dd>{format(l.input)}</dd>
+      <details className="advanced">
+        <summary>정밀 입력</summary>
+        <div className="form-grid">
+          <NumberField
+            label="입력 x"
+            value={l.input}
+            min={-5}
+            max={5}
+            onChange={l.setInput}
+          />
+          {classification && (
+            <NumberField
+              label="입력 x2"
+              value={l.input2}
+              min={-1000}
+              max={1000}
+              onChange={l.setInput2}
+            />
+          )}
         </div>
-        <div>
-          <dt>{l.task === "classification" ? "P(클래스 1)" : "모델 출력 ŷ"}</dt>
-          <dd>{format(l.f.y)}</dd>
+      </details>
+    </>
+  );
+}
+export function FilesPanel({ lab: l, save }: { lab: Lab; save: () => void }) {
+  const classification = l.task === "classification";
+  return (
+    <>
+      <div className="file-group">
+        <span className="section-label">실험</span>
+        <div className="button-row">
+          <button onClick={save}>
+            <Icon name="save" />
+            실험 저장
+          </button>
+          <button onClick={() => l.file.current?.click()}>
+            <Icon name="download" />
+            실험 불러오기
+          </button>
         </div>
-      </dl>
-      <p className="caption">
-        층 강조는 실제 계산 순서를 설명하는 교육적 비유입니다. 모든 활성화와
-        출력은 현재 입력과 실제 가중치에서 계산됩니다.
-      </p>
+      </div>
+      <div className="file-group">
+        <span className="section-label">데이터</span>
+        <div className="button-row">
+          <button onClick={() => l.datasetFile.current?.click()}>
+            CSV / JSON 가져오기
+          </button>
+          <button
+            onClick={() =>
+              download(
+                "dataset.csv",
+                (classification ? "x,y,label\n" : "x,y\n") +
+                  l.data
+                    .map(
+                      (p) =>
+                        `${p.x},${p.y}${classification ? `,${p.label}` : ""}`,
+                    )
+                    .join("\n"),
+                "text/csv",
+              )
+            }
+          >
+            CSV 내보내기
+          </button>
+        </div>
+      </div>
+      <div className="file-group">
+        <span className="section-label">이미지</span>
+        <div className="button-row">
+          <button
+            onClick={() =>
+              l.plotSVG.current &&
+              exportSVG(l.plotSVG.current, "neuralcanvas-plot.png")
+            }
+          >
+            그래프 PNG 내보내기
+          </button>
+          <button
+            onClick={() =>
+              l.networkSVG.current &&
+              exportSVG(l.networkSVG.current, "neuralcanvas-network.png")
+            }
+          >
+            신경망 PNG 내보내기
+          </button>
+        </div>
+      </div>
     </>
   );
 }

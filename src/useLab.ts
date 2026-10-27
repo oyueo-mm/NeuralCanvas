@@ -20,6 +20,7 @@ import {
   type ClassDefinition,
 } from "./engine";
 import type { Selection } from "./Network";
+import { themedClasses } from "./theme";
 import { loadExperiment, type Experiment, type RecordItem } from "./storage";
 import type { Request } from "./worker";
 export function useLab() {
@@ -31,15 +32,12 @@ export function useLab() {
     [epoch, setEpoch] = useState(0),
     [step, setStep] = useState(0),
     [gradient, setGradient] = useState<Gradients>(),
-    [message, setMessage] = useState(
-      "점을 만들고, 신경망을 설계하고, 학습을 관찰하세요.",
-    ),
+    [notice, setNotice] = useState({ text: "", id: 0 }),
     [input, setInput] = useState(0),
     [input2, setInput2] = useState(0),
     [activeClass, setActiveClass] = useState<0 | 1>(0),
-    [classDefinitions, setClassDefinitions] = useState<ClassDefinition[]>([
-      ...classes,
-    ]),
+    [classDefinitions, setClassDefinitions] =
+      useState<ClassDefinition[]>(themedClasses),
     [resolution, setResolution] = useState(48),
     [playing, setPlaying] = useState(false),
     [sweepSpeed, setSweepSpeed] = useState(1),
@@ -62,6 +60,10 @@ export function useLab() {
     saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined),
     restore = useRef(false);
   const task: Task = model.task ?? "regression";
+  const setMessage = useCallback(
+    (text: string) => setNotice((n) => ({ text, id: n.id + 1 })),
+    [],
+  );
   const modes = useRef<
     Partial<
       Record<
@@ -96,7 +98,7 @@ export function useLab() {
     setRunning(false);
   }, []);
   const invalidate = useCallback(
-    (text = "변경을 반영하고 학습 이력을 초기화했습니다.") => {
+    (text = "") => {
       stopWorker();
       setHistory([]);
       setEpoch(0);
@@ -104,7 +106,7 @@ export function useLab() {
       setGradient(undefined);
       setMessage(text);
     },
-    [stopWorker],
+    [stopWorker, setMessage],
   );
   const editModel = (m: Model) => {
     invalidate();
@@ -116,13 +118,13 @@ export function useLab() {
         const valid = validatePoints(p, task);
         setUndo((u) => [...u.slice(-49), data]);
         setRedo([]);
-        invalidate("데이터가 변경되었습니다. 학습 상태를 초기화했습니다.");
+        invalidate();
         setData(valid);
       } catch (e) {
         setMessage(String(e));
       }
     },
-    [data, invalidate, task],
+    [data, invalidate, task, setMessage],
   );
   const changeSettings = (s: Settings) => {
     invalidate();
@@ -187,20 +189,14 @@ export function useLab() {
       return;
     }
     if (type === "run" && epoch >= settings.epochs) {
-      setMessage("목표 Epoch에 도달했습니다. 목표를 늘리거나 초기화하세요.");
+      setMessage("목표 Epoch에 도달했습니다.");
       return;
     }
     setPlaying(false);
     const w = ensureWorker();
     w.postMessage({ type, revision: revision.current } satisfies Request);
     setRunning(type === "run");
-    setMessage(
-      type === "pause"
-        ? "학습을 일시정지했습니다. 재개하면 Optimizer 상태가 유지됩니다."
-        : type === "run"
-          ? "학습 중입니다."
-          : "학습을 한 단계 진행했습니다.",
-    );
+    setMessage("");
   }
   const experiment = (includeOther = true): Experiment => ({
     version: 2,
@@ -259,7 +255,7 @@ export function useLab() {
       classes.map((c) => ({
         ...c,
         name: e.classes?.[c.id]?.name ?? c.name,
-        color: e.classes?.[c.id]?.color ?? c.color,
+        color: themedClasses[c.id].color,
       })),
     );
     setName(e.name);
@@ -280,9 +276,6 @@ export function useLab() {
         noise: 0,
         activeClass: 0,
       };
-    setMessage(
-      "실험을 불러왔습니다. 가중치는 복원되며 다음 학습은 새 Optimizer로 시작합니다.",
-    );
   }
   function switchTask(next: Task) {
     if (next === task) return;
@@ -324,9 +317,7 @@ export function useLab() {
     setCount(cached?.count ?? (next === "classification" ? 100 : 50));
     setNoise(cached?.noise ?? (next === "classification" ? 0.12 : 0));
     setActiveClass(cached?.activeClass ?? 0);
-    setMessage(
-      `${next === "classification" ? "분류" : "회귀"} 실험으로 전환했습니다. 다른 모드의 데이터와 모델은 보관됩니다.`,
-    );
+    setMessage("");
   }
   useEffect(() => {
     if (restore.current) return;
@@ -393,8 +384,10 @@ export function useLab() {
       if (item.size > 5_000_000)
         throw Error("파일은 최대 5MB까지 불러올 수 있습니다.");
       const text = await item.text();
-      if (kind === "experiment") applyExperiment(loadExperiment(text));
-      else
+      if (kind === "experiment") {
+        applyExperiment(loadExperiment(text));
+        setMessage("불러왔습니다.");
+      } else
         changeData(
           item.name.endsWith(".csv")
             ? parseCSV(text, task)
@@ -434,7 +427,8 @@ export function useLab() {
     epoch,
     step,
     gradient,
-    message,
+    message: notice.text,
+    messageId: notice.id,
     input,
     input2,
     setInput2,

@@ -9,61 +9,74 @@ import {
   Legend,
 } from "recharts";
 import type { RecordItem } from "./storage";
-export default function LossChart({ history }: { history: RecordItem[] }) {
+import { palette } from "./theme";
+export default function LossChart({
+  history,
+  task,
+}: {
+  history: RecordItem[];
+  task: string;
+}) {
+  const metric = task === "classification" ? "BCE" : "MSE";
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart
         data={history}
-        margin={{ top: 12, right: 14, bottom: 24, left: 4 }}
+        margin={{ top: 8, right: 10, bottom: 20, left: 0 }}
       >
-        <CartesianGrid stroke="#e9eef5" vertical={false} />
+        <CartesianGrid stroke={palette.grid} vertical={false} />
         <XAxis
           dataKey="step"
-          stroke="#64748b"
+          stroke={palette.muted}
           minTickGap={40}
           tick={{ fontSize: 12 }}
           label={{
             value: "업데이트 횟수",
             position: "bottom",
             offset: 8,
-            fill: "#64748b",
+            fill: palette.muted,
             fontSize: 12,
           }}
         />
         <YAxis
-          stroke="#64748b"
-          width={65}
+          stroke={palette.muted}
+          width={52}
           tick={{ fontSize: 12 }}
           tickFormatter={(v) => Number(v.toPrecision(3)).toString()}
           label={{
-            value: "MSE",
+            value: metric,
             angle: -90,
             position: "insideLeft",
-            fill: "#64748b",
+            fill: palette.muted,
             fontSize: 12,
           }}
         />
         <Tooltip
           contentStyle={{
-            border: "1px solid #e2e8f0",
+            border: `1px solid ${palette.sageLight}`,
             borderRadius: 8,
-            color: "#111827",
+            color: palette.ink,
           }}
           labelFormatter={(v) => `업데이트 ${v}`}
         />
-        <Legend verticalAlign="top" height={28} />
+        <Legend
+          verticalAlign="top"
+          height={24}
+          iconSize={10}
+          wrapperStyle={{ fontSize: 12 }}
+        />
         <Line
-          name="학습 MSE"
+          name={`학습 ${metric}`}
           dataKey="train"
-          stroke="#2563eb"
+          stroke={palette.sageDeep}
           strokeWidth={2}
           dot={false}
           isAnimationActive={false}
         />
         <Line
-          name="검증 MSE"
+          name={`검증 ${metric}`}
           dataKey="validation"
-          stroke="#d97706"
+          stroke={palette.rose}
           strokeWidth={2}
           strokeDasharray="6 3"
           dot={false}
