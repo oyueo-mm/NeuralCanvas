@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./tests",
   timeout: 90000,
   fullyParallel: false,
+  reporter: process.env.CI ? [["github"], ["list"]] : "list",
   use: {
     baseURL:
       process.env.NEURALCANVAS_URL ?? "http://127.0.0.1:4175/NeuralCanvas/",
