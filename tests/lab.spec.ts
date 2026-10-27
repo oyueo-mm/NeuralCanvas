@@ -118,9 +118,9 @@ test("model editing in the sidebar, worker training, one Epoch and observation",
     )
     .toBeGreaterThan(stopped.history.at(-1).step);
   await page.getByRole("button", { name: "일시정지", exact: true }).click();
-  expect((await saved(page)).history.at(-1).step).toBeGreaterThan(
-    stopped.history.at(-1).step,
-  );
+  await expect
+    .poll(async () => (await saved(page)).history.at(-1).step)
+    .toBeGreaterThan(stopped.history.at(-1).step);
   expect(workers).toBe(1);
   const model = (await saved(page)).model;
   await section(page, "observe");

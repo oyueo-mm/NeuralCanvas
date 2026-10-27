@@ -765,21 +765,18 @@ details[open] > summary {
   color: var(--muted);
 }
 .side-body {
-  display: grid;
-  grid-template-rows: 0fr;
-  visibility: hidden;
-  transition:
-    grid-template-rows 0.2s ease,
-    visibility 0s 0.2s;
+  display: none;
 }
 .side-section.open .side-body {
-  grid-template-rows: 1fr;
-  visibility: visible;
-  transition: grid-template-rows 0.2s ease;
+  display: block;
 }
-.side-body > div {
-  min-height: 0;
-  overflow: hidden;
+.side-section.open .side-content {
+  animation: reveal 0.16s ease-out;
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+  }
 }
 .side-content {
   padding: 12px;

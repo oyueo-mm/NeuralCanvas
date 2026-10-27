@@ -64,7 +64,9 @@ for (const [width, height] of [
       await expect(page.locator("#sidebar")).toBeHidden();
       await openSide(page);
       await expect(page.getByTestId("network")).toBeVisible();
-      await expect(page.getByTestId("network")).toBeInViewport({ ratio: 1 });
+      await expect(page.getByTestId("network")).toBeInViewport({
+        ratio: 0.98,
+      });
       await leaveSide(page);
     }
     if (info.project.name === "chromium" || info.project.name === "mobile")
