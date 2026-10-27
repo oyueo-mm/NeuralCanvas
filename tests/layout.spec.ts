@@ -207,7 +207,7 @@ test("analysis and input observation work from the sidebar", async ({
   await leaveSide(page);
   await page.getByRole("button", { name: "한 Epoch", exact: true }).click();
   await expect
-    .poll(async () => (await saved(page)).history.length)
+    .poll(async () => (await saved(page))?.history.length ?? 0)
     .toBeGreaterThan(0);
   await section(page, "analysis");
   await expect(
