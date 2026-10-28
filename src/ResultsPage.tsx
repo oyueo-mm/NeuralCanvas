@@ -29,8 +29,8 @@ export const ResultsPage = memo(function ResultsPage({ lab: l }: { lab: Lab }) {
       </dl>
       <Analysis lab={l} />
       <p className="muted small">
-        기록은 최대 1,000개이며 길어지면 전체 곡선을 유지하도록 솎아 냅니다. 누적
-        Epoch와 업데이트는 기록과 별도로 집계합니다.
+        기록은 최대 1,000개이며 길어지면 전체 곡선을 유지하도록 솎아 냅니다.
+        누적 Epoch와 업데이트는 기록과 별도로 집계합니다.
       </p>
     </div>
   );

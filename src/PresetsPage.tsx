@@ -47,8 +47,20 @@ function Scatter({
       <rect width={width} height={height} fill={palette.white} />
       {detail && (
         <>
-          <line x1={pad} x2={width - pad} y1={sy(0)} y2={sy(0)} stroke={palette.grid} />
-          <line x1={sx(0)} x2={sx(0)} y1={pad} y2={height - pad} stroke={palette.grid} />
+          <line
+            x1={pad}
+            x2={width - pad}
+            y1={sy(0)}
+            y2={sy(0)}
+            stroke={palette.grid}
+          />
+          <line
+            x1={sx(0)}
+            x2={sx(0)}
+            y1={pad}
+            y2={height - pad}
+            stroke={palette.grid}
+          />
         </>
       )}
       {points.map((p, i) => (
@@ -83,25 +95,37 @@ function Structure({ preset }: { preset: ExperimentPreset }) {
     y = (l: number, j: number) =>
       h / 2 + (j - (sizes[l] - 1) / 2) * Math.min(9, (h - 14) / 16);
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="preset-structure" aria-hidden="true">
-      {sizes.slice(1).map((n, l) =>
-        Array.from({ length: n }, (_, j) =>
-          Array.from({ length: sizes[l] }, (_, i) => (
-            <line
-              key={`${l}-${j}-${i}`}
-              x1={x(l)}
-              x2={x(l + 1)}
-              y1={y(l, i)}
-              y2={y(l + 1, j)}
-              stroke={palette.sageLight}
-              strokeWidth="0.5"
-            />
-          )),
-        ),
-      )}
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className="preset-structure"
+      aria-hidden="true"
+    >
+      {sizes
+        .slice(1)
+        .map((n, l) =>
+          Array.from({ length: n }, (_, j) =>
+            Array.from({ length: sizes[l] }, (_, i) => (
+              <line
+                key={`${l}-${j}-${i}`}
+                x1={x(l)}
+                x2={x(l + 1)}
+                y1={y(l, i)}
+                y2={y(l + 1, j)}
+                stroke={palette.sageLight}
+                strokeWidth="0.5"
+              />
+            )),
+          ),
+        )}
       {sizes.map((n, l) =>
         Array.from({ length: n }, (_, j) => (
-          <circle key={`${l}-${j}`} cx={x(l)} cy={y(l, j)} r="2.8" fill={palette.sage} />
+          <circle
+            key={`${l}-${j}`}
+            cx={x(l)}
+            cy={y(l, j)}
+            r="2.8"
+            fill={palette.sage}
+          />
         )),
       )}
     </svg>
@@ -114,7 +138,9 @@ export const PresetsPage = memo(function PresetsPage({
   lab: Lab;
   onApplied: () => void;
 }) {
-  const [task, setTask] = useState<"all" | "regression" | "classification">("all"),
+  const [task, setTask] = useState<"all" | "regression" | "classification">(
+      "all",
+    ),
     [level, setLevel] = useState<"all" | Difficulty>("all"),
     [selected, setSelected] = useState(experimentPresets[0].id),
     [confirm, setConfirm] = useState(false),
@@ -128,8 +154,7 @@ export const PresetsPage = memo(function PresetsPage({
       ),
     [task, level],
   );
-  const preset =
-    shown.find((p) => p.id === selected) ?? shown[0] ?? undefined;
+  const preset = shown.find((p) => p.id === selected) ?? shown[0] ?? undefined;
   const chip = (
     current: string,
     value: string,
@@ -176,7 +201,9 @@ export const PresetsPage = memo(function PresetsPage({
             </li>
           ))}
         </ul>
-        {!shown.length && <p className="muted">조건에 맞는 프리셋이 없습니다.</p>}
+        {!shown.length && (
+          <p className="muted">조건에 맞는 프리셋이 없습니다.</p>
+        )}
       </div>
       {preset && (
         <section className="preset-detail" aria-label="프리셋 미리보기">
@@ -194,9 +221,11 @@ export const PresetsPage = memo(function PresetsPage({
             <div>
               <dt>구조</dt>
               <dd>
-                {[preset.task === "classification" ? 2 : 1, ...preset.hidden, 1].join(
-                  " → ",
-                )}{" "}
+                {[
+                  preset.task === "classification" ? 2 : 1,
+                  ...preset.hidden,
+                  1,
+                ].join(" → ")}{" "}
                 · {[...new Set(preset.activations)].join(", ")}
               </dd>
             </div>
@@ -225,8 +254,8 @@ export const PresetsPage = memo(function PresetsPage({
             실험에 적용
           </button>
           <p className="muted small">
-            미리보기는 현재 실험을 바꾸지 않습니다. 결과는 기기와 시드에 따라 달라질
-            수 있습니다.
+            미리보기는 현재 실험을 바꾸지 않습니다. 결과는 기기와 시드에 따라
+            달라질 수 있습니다.
           </p>
         </section>
       )}
@@ -237,8 +266,8 @@ export const PresetsPage = memo(function PresetsPage({
           returnFocus={opener.current}
         >
           <p>
-            현재 {l.task === "regression" ? "회귀" : "분류"} 실험의 데이터·모델·학습
-            이력이 <b>{preset.name}</b> 구성으로 교체됩니다.
+            현재 {l.task === "regression" ? "회귀" : "분류"} 실험의
+            데이터·모델·학습 이력이 <b>{preset.name}</b> 구성으로 교체됩니다.
             {preset.task !== l.task &&
               " 다른 유형이므로 현재 실험은 보관되고 유형이 전환됩니다."}
           </p>

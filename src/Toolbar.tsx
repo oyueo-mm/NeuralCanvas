@@ -21,12 +21,16 @@ export function FloatingToolbar({
       parent = toolbar.parentElement;
     const measure = () => {
       const height = toolbar.getBoundingClientRect().height;
-      if (height > 0) parent?.style.setProperty("--toolbar-space", `${height + 20}px`);
+      if (height > 0)
+        parent?.style.setProperty("--toolbar-space", `${height + 20}px`);
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(toolbar);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      parent?.style.removeProperty("--toolbar-space");
+    };
   }, []);
   return (
     <div
@@ -44,16 +48,14 @@ function SpeedControl({ lab: l }: { lab: Lab }) {
   const id = useId(),
     turbo = l.mode === "turbo",
     speed = l.settings.speed;
-  const detail = turbo
-    ? "최대"
-    : `≈ ${formatRate(targetRate(speed))} batch/s`;
+  const detail = turbo ? "최대" : `≈ ${formatRate(targetRate(speed))} batch/s`;
   return (
     <div className="speed-control" data-testid="speed-control">
       <div className="speed-heading">
         <label htmlFor={id}>
           학습 속도 <strong>{turbo ? "최대" : speedLabel(speed)}</strong>
         </label>
-        <output htmlFor={id}>{detail}</output>
+        <span>{detail}</span>
       </div>
       <input
         id={id}
@@ -107,6 +109,7 @@ export function TrainingToolbar({
       <div className="tb-row">
         <div className="segmented tb-mode" role="group" aria-label="학습 방식">
           <button
+            aria-label="일반"
             aria-pressed={!turbo}
             title="학습 과정을 실시간으로 관찰합니다"
             onClick={() => l.setMode("normal")}
@@ -115,6 +118,7 @@ export function TrainingToolbar({
             <span>일반</span>
           </button>
           <button
+            aria-label="고속"
             aria-pressed={turbo}
             title="그래프 갱신을 줄이고 계산 처리량을 최대로 높입니다"
             onClick={() => l.setMode("turbo")}
@@ -199,11 +203,7 @@ export function TrainingToolbar({
               >
                 <Icon name="epoch" />한 Epoch
               </button>
-              <button
-                className="danger"
-                disabled={l.running}
-                onClick={onReset}
-              >
+              <button className="danger" disabled={l.running} onClick={onReset}>
                 <Icon name="reset" />
                 초기화
               </button>
@@ -239,7 +239,7 @@ export function TrainingToolbar({
             </dd>
           </div>
         )}
-        {l.running && l.rate.batchesPerSec > 0 && (
+        {l.rate.batchesPerSec > 0 && (
           <div className="rate-metric">
             <dt>처리량</dt>
             <dd data-testid="throughput">

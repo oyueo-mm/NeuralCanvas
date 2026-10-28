@@ -338,6 +338,7 @@ export const Plot = memo(function Plot({
       ...range,
       span: Math.max(0.1, Math.min(2000, range.span * factor)),
     });
+  const probe = classification ? forward(model, [input, input2]).y : 0;
   const modeButtons = classification
     ? [...modes, { id: "observe" as const, label: "좌표 관찰", icon: "probe" }]
     : modes;
@@ -413,8 +414,8 @@ export const Plot = memo(function Plot({
           {edit && (
             <button
               className="tool edit-data"
-              aria-label="데이터 편집"
-              title="데이터 편집"
+              aria-label="편집 도구 열기"
+              title="편집 도구 열기"
               onClick={edit}
               onPointerUp={(e) => {
                 if (e.pointerType === "touch") edit();
@@ -685,6 +686,14 @@ export const Plot = memo(function Plot({
               관찰
             </span>
           </div>
+        )}
+        {classification && mode === "observe" && (
+          <span className="probe-readout">
+            C{Number(probe >= 0.5)}{" "}
+            <strong data-testid="probability">
+              {((probe >= 0.5 ? probe : 1 - probe) * 100).toFixed(1)}%
+            </strong>
+          </span>
         )}
         <span className="coordinate-hint" aria-hidden="true">
           {cursor ? `(${cursor.x.toFixed(2)}, ${cursor.y.toFixed(2)})` : ""}

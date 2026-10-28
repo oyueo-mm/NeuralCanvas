@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { closeDialog, goPage } from "./helpers";
 test("classification touch stroke, undo, point move and bottom sheet", async ({
   page,
   browserName,
@@ -10,6 +11,7 @@ test("classification touch stroke, undo, point move and bottom sheet", async ({
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("./");
+  await goPage(page, "lab");
   await page.getByRole("button", { name: "분류", exact: true }).tap();
   await page.getByRole("button", { name: "클래스 1", exact: true }).tap();
   await page.getByRole("button", { name: "연속 그리기", exact: true }).tap();
@@ -30,7 +32,7 @@ test("classification touch stroke, undo, point move and bottom sheet", async ({
   });
   const count = await page.getByTestId("data-point").count();
   expect(count).toBeGreaterThan(105);
-  await page.getByRole("button", { name: "데이터 편집", exact: true }).tap();
+  await page.getByRole("button", { name: "편집 도구 열기", exact: true }).tap();
   await page.getByRole("button", { name: "실행 취소", exact: true }).tap();
   await expect(page.getByTestId("data-point")).toHaveCount(100);
   await page.getByRole("button", { name: "다시 실행", exact: true }).tap();
@@ -71,6 +73,7 @@ test("touch pinch, pan, drawer retention and keyboard-sized viewport", async ({
     "Uses Chromium emulated multi-touch input.",
   );
   await page.goto("./");
+  await goPage(page, "lab");
   await page.waitForTimeout(800);
   const saved = JSON.parse(
       await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")!),
@@ -112,8 +115,7 @@ test("touch pinch, pan, drawer retention and keyboard-sized viewport", async ({
       await page.evaluate(() => localStorage.getItem("neuralcanvas-v1")!),
     ).data,
   ).toEqual(saved.data);
-  const toggle = page.locator(".sidebar-toggle");
-  await toggle.tap();
+  await goPage(page, "network");
   await expect(page.getByTestId("network")).toBeVisible();
   await page.waitForTimeout(400);
   await pinch("network");
@@ -142,6 +144,7 @@ test("touch pinch, pan, drawer retention and keyboard-sized viewport", async ({
   await page.getByRole("button", { name: "신경망 화면 맞춤" }).tap();
   await expect(page.getByTestId("network")).toHaveAttribute("data-zoom", "1");
   await page.getByRole("button", { name: "뉴런 1-0", exact: true }).tap();
+  await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByLabel("편향", { exact: true }).fill(".125");
   await page.setViewportSize({ width: 390, height: 480 });
   await page.getByLabel("편향", { exact: true }).scrollIntoViewIfNeeded();
@@ -149,9 +152,9 @@ test("touch pinch, pan, drawer retention and keyboard-sized viewport", async ({
     ratio: 1,
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await toggle.tap();
-  await expect(page.locator("#sidebar")).toBeHidden();
-  await toggle.tap();
+  await closeDialog(page);
+  await goPage(page, "lab");
+  await goPage(page, "network");
   await expect(page.getByTestId("network")).toHaveAttribute("data-zoom", "1");
   await expect(
     page.getByRole("button", { name: "뉴런 1-0", exact: true }),
@@ -164,8 +167,7 @@ test("touch pinch, pan, drawer retention and keyboard-sized viewport", async ({
   expect(after.model.layers[0].b[0]).toBe(0.125);
   expect(after.model.layers[0].w).toEqual(saved.model.layers[0].w);
   await page.screenshot({ path: "test-results/mobile-network.png" });
-  await toggle.tap();
-  await expect(page.locator("#sidebar")).toBeHidden();
+  await goPage(page, "lab");
   await page.getByRole("button", { name: "데이터 화면 맞춤" }).tap();
   await page.getByTestId("data-point").nth(10).tap();
   await expect(page.getByRole("dialog")).toBeVisible();

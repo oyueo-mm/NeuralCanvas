@@ -170,8 +170,7 @@ export function useLab() {
         setRunning(r.running);
         setRate(r.rate);
       }
-      if (r.type === "history")
-        setHistory((h) => appendHistory(h, r.records));
+      if (r.type === "history") setHistory((h) => appendHistory(h, r.records));
       if (r.type === "error") {
         stopWorker();
         setMessage(r.message);

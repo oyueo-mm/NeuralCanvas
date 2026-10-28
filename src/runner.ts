@@ -139,10 +139,11 @@ export class Runner {
       this.snapshot();
     }
   }
-  private measure(batches: number) {
+  /** Updates the throughput once a window is long enough, or at the end of a short run. */
+  private measure(batches: number, final = false) {
     this.window.batches += batches;
     const elapsed = this.clock.now() - this.window.start;
-    if (elapsed < 500) return;
+    if (elapsed < 500 && !(final && elapsed > 0)) return;
     const batchesPerSec = (this.window.batches * 1000) / elapsed,
       trainSize = Math.max(1, this.trainer.train.length);
     this.rate = {
@@ -188,7 +189,7 @@ export class Runner {
       n < cap &&
       this.clock.now() - start < sliceMs
     );
-    this.measure(n);
+    this.measure(n, trainer.epoch >= limit);
     this.pending.push(trainer.metrics());
     if (trainer.epoch >= limit) this.job = null;
     if (

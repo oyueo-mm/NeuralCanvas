@@ -83,7 +83,13 @@ export function Popover({
         {text && <span>{text}</span>}
       </button>
       {open && (
-        <div ref={box} id={id} className="popover" role="group" aria-label={label}>
+        <div
+          ref={box}
+          id={id}
+          className="popover"
+          role="group"
+          aria-label={label}
+        >
           {children}
         </div>
       )}
@@ -233,7 +239,9 @@ export function Drawer({
 }
 export function Icon({ name }: { name: string }) {
   const paths: Record<string, ReactNode> = {
-    home: <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z" />,
+    home: (
+      <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z" />
+    ),
     lab: (
       <>
         <path d="M10 2v7.5L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9.5V2" />

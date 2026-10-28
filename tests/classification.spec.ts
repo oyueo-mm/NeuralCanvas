@@ -1,12 +1,16 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import {
+  closeDataTools,
   closeDialog,
+  closeIfDialog,
   collectDiagnostics,
   diagnostics,
-  leaveSide,
+  goPage,
+  openDataTools,
+  openInspector,
+  popover,
   saved,
-  section,
 } from "./helpers";
 async function stroke(page: Page) {
   await page.getByRole("button", { name: "연속 그리기", exact: true }).click();
@@ -19,6 +23,7 @@ async function stroke(page: Page) {
 test.beforeEach(async ({ page }) => {
   collectDiagnostics(page);
   await page.goto("./");
+  await goPage(page, "lab");
 });
 test.afterEach(async ({ page }) => {
   expect(diagnostics.get(page)).toEqual([]);
@@ -29,7 +34,9 @@ test("regression continuous drawing commits one reversible stroke", async ({
   const original = (await saved(page)).data;
   await stroke(page);
   expect((await saved(page)).data.length).toBeGreaterThan(original.length + 5);
-  await page.getByRole("button", { name: "데이터 편집", exact: true }).click();
+  await page
+    .getByRole("button", { name: "편집 도구 열기", exact: true })
+    .click();
   await page.getByRole("button", { name: "실행 취소", exact: true }).click();
   expect((await saved(page)).data).toEqual(original);
   await page.getByRole("button", { name: "다시 실행", exact: true }).click();
@@ -68,7 +75,9 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   expect(
     state.data.slice(100).every((p: { label: number }) => p.label === 1),
   ).toBe(true);
-  await page.getByRole("button", { name: "데이터 편집", exact: true }).click();
+  await page
+    .getByRole("button", { name: "편집 도구 열기", exact: true })
+    .click();
   await page
     .getByLabel("데이터 포인트 선택")
     .selectOption(String(state.data.length - 1));
@@ -96,14 +105,18 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   }
   await page.getByRole("button", { name: "Two moons", exact: true }).click();
   await closeDialog(page);
-  await section(page, "files");
+  await goPage(page, "data");
+  await openDataTools(page);
   const csv = page.waitForEvent("download");
   await page.getByRole("button", { name: "CSV 내보내기", exact: true }).click();
   expect(await readFile((await (await csv).path())!, "utf8")).toMatch(
     /^x,y,label\n/,
   );
-  await leaveSide(page);
+  await closeDataTools(page);
+  await goPage(page, "lab");
+  await popover(page, "시각화 설정");
   await page.getByLabel("결정 경계 해상도").selectOption("24");
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("decision-boundary")).toBeVisible();
   const initial = await page
     .getByTestId("decision-boundary")
@@ -143,13 +156,14 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   expect(
     await page.getByTestId("data-plot").getAttribute("data-boundary-updates"),
   ).toBe(updates);
-  await section(page, "network");
+  await goPage(page, "network");
   await page.getByRole("button", { name: "뉴런 1-0", exact: true }).click();
+  await openInspector(page);
   await expect(page.getByText(/ID l0n0 · layer 1 \/ index 0/)).toBeVisible();
   await expect(
     page.getByText("Incoming 활성 / 전체 · 평균 |w|", { exact: true }),
   ).toBeVisible();
-  await leaveSide(page);
+  await closeIfDialog(page);
   await page.getByRole("button", { name: "회귀", exact: true }).click();
   const restored = await saved(page);
   expect(restored.data).toEqual(regression.data);
@@ -159,6 +173,7 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   expect(resumed.data).toEqual(state.data);
   expect(resumed.model).toEqual(state.model);
   await page.reload();
+  await goPage(page, "lab");
   await expect(page.getByTestId("decision-boundary")).toBeVisible();
   expect((await saved(page)).model).toEqual(state.model);
   await page.getByRole("button", { name: "실험 메뉴 열기" }).click();
@@ -170,7 +185,7 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   expect(exported.version).toBe(2);
   expect(exported.task).toBe("classification");
   expect(exported.other.model).toEqual(regression.model);
-  await section(page, "files");
+  await popover(page, "시각화 설정");
   const png = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "그래프 PNG 내보내기", exact: true })
@@ -178,7 +193,8 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
   expect(
     (await readFile((await (await png).path())!)).subarray(1, 4).toString(),
   ).toBe("PNG");
-  await section(page, "analysis");
+  await page.keyboard.press("Escape");
+  await goPage(page, "results");
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.getByTestId("validation-accuracy")).toHaveText(/\d+\.\d+%/);
 });
@@ -192,6 +208,7 @@ for (const [width, height] of [
     page,
   }, info) => {
     await page.setViewportSize({ width, height });
+    await page.waitForTimeout(300);
     await page.getByRole("button", { name: "분류", exact: true }).click();
     await expect(page.getByTestId("decision-boundary")).toBeVisible();
     await expect(

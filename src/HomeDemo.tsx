@@ -26,7 +26,14 @@ export function HomeDemo() {
       new Trainer(
         createModel([5, 5], "tanh", 3),
         dataset("사인", 28, 0.12, 7),
-        { ...defaults, lr: 0.03, batch: 7, epochs: 1e9, validation: 0, seed: 5 },
+        {
+          ...defaults,
+          lr: 0.03,
+          batch: 7,
+          epochs: 1e9,
+          validation: 0,
+          seed: 5,
+        },
       ),
     [],
   );
@@ -113,20 +120,58 @@ export function HomeDemo() {
             );
           }),
         )}
-        <text x={xs[0]} y="46" textAnchor="middle" fontSize="11" fill={palette.muted}>
+        <text
+          x={xs[0]}
+          y="46"
+          textAnchor="middle"
+          fontSize="11"
+          fill={palette.muted}
+        >
           입력 x
         </text>
-        <text x={xs[3]} y="46" textAnchor="middle" fontSize="11" fill={palette.muted}>
+        <text
+          x={xs[3]}
+          y="46"
+          textAnchor="middle"
+          fontSize="11"
+          fill={palette.muted}
+        >
           예측 ŷ
         </text>
         <g>
-          <rect x="24" y="200" width="512" height="105" rx="6" fill="none" stroke={palette.grid} />
+          <rect
+            x="24"
+            y="200"
+            width="512"
+            height="105"
+            rx="6"
+            fill="none"
+            stroke={palette.grid}
+          />
           <line x1="24" x2="536" y1={sy(0)} y2={sy(0)} stroke={palette.grid} />
           {trainer.train.concat(trainer.validation).map((p, i) => (
-            <circle key={i} cx={sx(p.x)} cy={sy(p.y)} r="3.2" fill={palette.sage} />
+            <circle
+              key={i}
+              cx={sx(p.x)}
+              cy={sy(p.y)}
+              r="3.2"
+              fill={palette.sage}
+            />
           ))}
-          <path d={curve} fill="none" stroke={palette.sageDeep} strokeWidth="2.4" />
-          <line x1={sx(x)} x2={sx(x)} y1="200" y2="305" stroke={palette.pink} strokeWidth="2" />
+          <path
+            d={curve}
+            fill="none"
+            stroke={palette.sageDeep}
+            strokeWidth="2.4"
+          />
+          <line
+            x1={sx(x)}
+            x2={sx(x)}
+            y1="200"
+            y2="305"
+            stroke={palette.pink}
+            strokeWidth="2"
+          />
           <circle cx={sx(x)} cy={sy(f.y)} r="5" fill={palette.rose} />
         </g>
       </svg>

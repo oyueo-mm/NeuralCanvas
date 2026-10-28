@@ -124,7 +124,10 @@ export const NetworkView = memo(function NetworkView({
     return p.matrixTransform(e.currentTarget.getScreenCTM()!.inverse());
   };
   const zoom = (factor: number) =>
-    setView((v) => ({ ...v, zoom: Math.max(0.3, Math.min(6, v.zoom * factor)) }));
+    setView((v) => ({
+      ...v,
+      zoom: Math.max(0.3, Math.min(6, v.zoom * factor)),
+    }));
   function down(e: PointerEvent<SVGSVGElement>) {
     if (e.button !== 0) return;
     const p = local(e);
@@ -328,7 +331,12 @@ export const NetworkView = memo(function NetworkView({
             pinch.current = null;
           }}
         >
-          <rect width={W} height={H} fill={palette.white} pointerEvents="none" />
+          <rect
+            width={W}
+            height={H}
+            fill={palette.white}
+            pointerEvents="none"
+          />
           <g
             transform={`translate(${W / 2 + view.x} ${H / 2 + view.y}) scale(${scale}) translate(${-worldW / 2} ${-worldH / 2})`}
             data-testid="network-transform"
@@ -433,7 +441,12 @@ export const NetworkView = memo(function NetworkView({
                           ? `가중합 ${f.z[l - 1][j].toFixed(5)} · 활성화 ${a.toFixed(5)} · 편향 ${model.layers[l - 1].b[j].toFixed(5)}`
                           : `입력 ${f.a[0][j].toFixed(5)}`}
                       </title>
-                      <circle cx={p.x} cy={p.y} r={radius + 5} fill="transparent" />
+                      <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={radius + 5}
+                        fill="transparent"
+                      />
                       <circle
                         cx={p.x}
                         cy={p.y}

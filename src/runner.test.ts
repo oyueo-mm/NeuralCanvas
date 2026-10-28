@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createModel, dataset, defaults, classificationDataset } from "./engine";
+import {
+  createModel,
+  dataset,
+  defaults,
+  classificationDataset,
+} from "./engine";
 import { Runner, type Clock, type Mode, type Outgoing } from "./runner";
 import { formatRate, pace, speedLabel, targetRate } from "./speed";
 import { Trainer } from "./training";
@@ -132,7 +137,11 @@ describe("training scheduler", () => {
     expect(records.length).toBeLessThan(h.t.step / 3);
     expect(records.at(-1)).toMatchObject({ step: h.t.step, epoch: 25 });
     const last = h.messages.filter((m) => m.type === "snapshot").at(-1)!;
-    expect(last).toMatchObject({ running: false, step: h.t.step, mode: "turbo" });
+    expect(last).toMatchObject({
+      running: false,
+      step: h.t.step,
+      mode: "turbo",
+    });
   });
   it("normal mode records every update", () => {
     const h = harness("normal");

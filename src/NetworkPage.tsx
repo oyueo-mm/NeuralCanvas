@@ -1,10 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { ModelEditor, ObservationPanel } from "./Panels";
-import {
-  NetworkView,
-  type EdgeMode,
-  type ValueMode,
-} from "./NetworkView";
+import { NetworkView, type EdgeMode, type ValueMode } from "./NetworkView";
 import { exportSVG } from "./storage";
 import { Drawer, Icon, useCompact, usePersisted } from "./ui";
 import type { Lab } from "./useLab";
@@ -19,12 +15,18 @@ export const NetworkPage = memo(function NetworkPage({
   const compact = useCompact(),
     [inspector, setInspector] = usePersisted("neuralcanvas-inspector", true),
     [sheet, setSheet] = useState(false),
-    [edgeMode, setEdgeMode] = usePersisted<EdgeMode>("neuralcanvas-edges", "all"),
+    [edgeMode, setEdgeMode] = usePersisted<EdgeMode>(
+      "neuralcanvas-edges",
+      "all",
+    ),
     [valueMode, setValueMode] = useState<ValueMode>("index"),
     opener = useRef<HTMLElement | null>(null);
   // On a narrow screen a chosen neuron or connection opens the sheet.
+  const previous = useRef(l.selection);
   useEffect(() => {
-    if (compact && active && l.selection) setSheet(true);
+    if (compact && active && l.selection && l.selection !== previous.current)
+      setSheet(true);
+    previous.current = l.selection;
   }, [compact, active, l.selection]);
   const panel = (
     <>
@@ -38,7 +40,13 @@ export const NetworkPage = memo(function NetworkPage({
   const toggle = (
     <button
       className="tool"
-      aria-label={compact ? "신경망 편집 열기" : inspector ? "Inspector 닫기" : "Inspector 열기"}
+      aria-label={
+        compact
+          ? "신경망 편집 열기"
+          : inspector
+            ? "Inspector 닫기"
+            : "Inspector 열기"
+      }
       aria-pressed={compact ? sheet : inspector}
       title="Inspector"
       onClick={() => {
@@ -64,7 +72,9 @@ export const NetworkPage = memo(function NetworkPage({
     </button>
   );
   return (
-    <div className={`network-stage ${!compact && inspector ? "with-inspector" : ""}`}>
+    <div
+      className={`network-stage ${!compact && inspector ? "with-inspector" : ""}`}
+    >
       <div className="network-main">
         <NetworkView
           key={l.task}

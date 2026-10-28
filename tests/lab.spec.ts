@@ -2,17 +2,22 @@ import { test, expect } from "@playwright/test";
 import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import {
+  closeDataTools,
   closeDialog,
+  closeIfDialog,
   collectDiagnostics,
   diagnostics,
-  leaveSide,
-  openSide,
+  goPage,
+  moreTool,
+  openDataTools,
+  openInspector,
+  popover,
   saved,
-  section,
 } from "./helpers";
 test.beforeEach(async ({ page }) => {
   collectDiagnostics(page);
   await page.goto("./");
+  await goPage(page, "lab");
 });
 test.afterEach(async ({ page }) => {
   expect(diagnostics.get(page)).toEqual([]);
@@ -48,11 +53,14 @@ test("point editing, precise coordinates, undo and CSV", async ({ page }) => {
   await page.getByRole("button", { name: "선형", exact: true }).click();
   expect((await saved(page)).data[0].y).toBeCloseTo(-2.4);
   await closeDialog(page);
-  await section(page, "files");
+  // The data page edits the same dataset and offers CSV export.
+  await goPage(page, "data");
+  await openDataTools(page);
   const csv = page.waitForEvent("download");
   await page.getByRole("button", { name: "CSV 내보내기", exact: true }).click();
   expect((await csv).suggestedFilename()).toBe("dataset.csv");
-  await leaveSide(page);
+  await closeDataTools(page);
+  await goPage(page, "lab");
   const original = (await saved(page)).data;
   await page.getByRole("button", { name: "탐색", exact: true }).click();
   const span = await plot.getAttribute("data-span");
@@ -61,13 +69,14 @@ test("point editing, precise coordinates, undo and CSV", async ({ page }) => {
   expect((await saved(page)).data).toEqual(original);
   await page.getByRole("button", { name: "데이터 화면 맞춤" }).click();
 });
-test("model editing in the sidebar, worker training, one Epoch and observation", async ({
+test("model editing in the inspector, worker training, one Epoch and observation", async ({
   page,
 }) => {
   let workers = 0;
   page.on("worker", () => workers++);
-  await section(page, "network");
+  await goPage(page, "network");
   await page.getByRole("button", { name: "뉴런 1-0", exact: true }).click();
+  await openInspector(page);
   await page.getByLabel("편향", { exact: true }).fill("0.75");
   expect((await saved(page)).model.layers[0].b[0]).toBe(0.75);
   await page.getByLabel("은닉층 1 활성화").selectOption("sigmoid");
@@ -81,14 +90,15 @@ test("model editing in the sidebar, worker training, one Epoch and observation",
   await page.getByLabel("가중치", { exact: true }).fill("1.25");
   await page.getByRole("switch", { name: "연결 활성화" }).uncheck();
   expect((await saved(page)).model.layers[0].enabled[0][0]).toBe(false);
-  await leaveSide(page);
+  await closeIfDialog(page);
+  await goPage(page, "lab");
   const path = await page.getByTestId("prediction").getAttribute("d");
-  await page.getByRole("button", { name: "한 스텝", exact: true }).click();
+  await moreTool(page, "한 스텝");
   await expect
     .poll(async () => Number((await saved(page)).history.at(-1)?.step ?? 0))
     .toBe(1);
   expect(await page.getByTestId("prediction").getAttribute("d")).not.toBe(path);
-  await page.getByRole("button", { name: "한 Epoch", exact: true }).click();
+  await moreTool(page, "한 Epoch");
   await expect
     .poll(async () => (await saved(page)).history.at(-1)?.epoch)
     .toBe(1);
@@ -96,12 +106,14 @@ test("model editing in the sidebar, worker training, one Epoch and observation",
   await expect(
     page.getByRole("button", { name: "일시정지", exact: true }),
   ).toBeVisible();
+  await popover(page, "학습 도구 더보기");
   await expect(
     page.getByRole("button", { name: "한 스텝", exact: true }),
   ).toBeDisabled();
-  // Opening, editing nothing and closing the sidebar must not disturb a running session.
-  await openSide(page);
-  await leaveSide(page);
+  await page.keyboard.press("Escape");
+  // Visiting other pages while training must not disturb the running session.
+  await goPage(page, "results");
+  await goPage(page, "lab");
   await page.getByRole("button", { name: "일시정지", exact: true }).click();
   const stopped = await saved(page);
   expect(stopped.history.length).toBeGreaterThan(2);
@@ -123,7 +135,8 @@ test("model editing in the sidebar, worker training, one Epoch and observation",
     .toBeGreaterThan(stopped.history.at(-1).step);
   expect(workers).toBe(1);
   const model = (await saved(page)).model;
-  await section(page, "observe");
+  await goPage(page, "network");
+  await openInspector(page);
   await page.getByRole("button", { name: "입력 순회", exact: true }).click();
   await page.waitForTimeout(200);
   await page
@@ -132,7 +145,7 @@ test("model editing in the sidebar, worker training, one Epoch and observation",
   const observed = await saved(page);
   expect(observed.model).toEqual(model);
   expect(observed.input).toBeGreaterThan(0);
-  await section(page, "network");
+  await closeIfDialog(page);
   const network = page.getByTestId("network");
   const transform = await page
     .getByTestId("network-transform")
@@ -142,10 +155,10 @@ test("model editing in the sidebar, worker training, one Epoch and observation",
     await page.getByTestId("network-transform").getAttribute("transform"),
   ).not.toBe(transform);
   const zoom = await network.getAttribute("data-zoom");
-  await leaveSide(page);
-  await openSide(page);
+  await goPage(page, "lab");
+  await goPage(page, "network");
   expect(await network.getAttribute("data-zoom")).toBe(zoom);
-  await section(page, "analysis");
+  await goPage(page, "results");
   await expect(page.getByTestId("loss-chart")).toBeVisible();
   await expect(
     page.getByTestId("loss-chart").locator("svg").first(),
@@ -154,12 +167,12 @@ test("model editing in the sidebar, worker training, one Epoch and observation",
 test("settings, menu focus, JSON compatibility and PNG export", async ({
   page,
 }) => {
-  await section(page, "training");
+  await popover(page, "학습 설정");
   await page.getByLabel("Optimizer", { exact: true }).selectOption("sgd");
   await page.getByLabel("학습률", { exact: true }).fill("0.005");
   await page.getByLabel("목표 Epoch", { exact: true }).fill("1000");
   expect((await saved(page)).settings.optimizer).toBe("sgd");
-  await leaveSide(page);
+  await page.keyboard.press("Escape");
   const menu = page.getByRole("button", { name: "실험 메뉴 열기" });
   await menu.click();
   await expect(page.getByLabel("실험 이름")).toBeVisible();
@@ -199,26 +212,42 @@ test("settings, menu focus, JSON compatibility and PNG export", async ({
       buffer: Buffer.from('{"version":999}'),
     });
   await expect(page.getByRole("status")).toContainText("불러오기 실패");
-  await section(page, "files");
-  for (const png of ["그래프 PNG 내보내기", "신경망 PNG 내보내기"]) {
-    const pending = page.waitForEvent("download");
-    await page.getByRole("button", { name: png, exact: true }).click();
-    const bytes = await readFile((await (await pending).path())!);
-    expect(
-      bytes
-        .subarray(0, 8)
-        .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
-    ).toBe(true);
-  }
-  await leaveSide(page);
-  await page.getByRole("button", { name: "데이터 편집", exact: true }).click();
+  await popover(page, "시각화 설정");
+  const graph = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "그래프 PNG 내보내기", exact: true })
+    .click();
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(
+    (await readFile((await (await graph).path())!))
+      .subarray(0, 8)
+      .equals(signature),
+  ).toBe(true);
+  await page.keyboard.press("Escape");
+  await goPage(page, "network");
+  const net = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "신경망 PNG 내보내기", exact: true })
+    .click();
+  expect(
+    (await readFile((await (await net).path())!))
+      .subarray(0, 8)
+      .equals(signature),
+  ).toBe(true);
+  await goPage(page, "lab");
+  await page
+    .getByRole("button", { name: "편집 도구 열기", exact: true })
+    .click();
   await page.getByRole("button", { name: "전체 삭제", exact: true }).click();
   await closeDialog(page);
   await page.getByRole("button", { name: "학습 시작", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("두 개 이상");
-  await page.getByRole("button", { name: "데이터 편집", exact: true }).click();
+  await page
+    .getByRole("button", { name: "편집 도구 열기", exact: true })
+    .click();
   await page.getByRole("button", { name: "실행 취소", exact: true }).click();
   await closeDialog(page);
   await page.reload();
+  await goPage(page, "lab");
   await expect(page.getByTestId("data-point")).toHaveCount(50);
 });

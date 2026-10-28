@@ -97,12 +97,14 @@ export const experimentPresets: ExperimentPreset[] = [
     activations: ["tanh", "tanh"],
     init: "xavier",
     settings: { ...base, lr: 0.005, batch: 16, epochs: 4000 },
-    expectation: "작은 모델보다 오래 걸리며, 진동을 모두 따라가지 못할 수 있습니다.",
+    expectation:
+      "작은 모델보다 오래 걸리며, 진동을 모두 따라가지 못할 수 있습니다.",
   },
   {
     id: "underfit",
     name: "과소적합 실험",
-    description: "표현력이 부족한 모델이 사인 곡선을 따라가지 못하는 모습을 봅니다.",
+    description:
+      "표현력이 부족한 모델이 사인 곡선을 따라가지 못하는 모습을 봅니다.",
     task: "regression",
     difficulty: "입문",
     data: { kind: "사인", count: 60, noise: 0.1, seed: 16 },
@@ -115,7 +117,8 @@ export const experimentPresets: ExperimentPreset[] = [
   {
     id: "overfit",
     name: "과적합 실험",
-    description: "표본이 적고 잡음이 큰데 모델은 큽니다. 검증 손실을 비교해 보세요.",
+    description:
+      "표본이 적고 잡음이 큰데 모델은 큽니다. 검증 손실을 비교해 보세요.",
     task: "regression",
     difficulty: "고급",
     data: { kind: "사인", count: 24, noise: 0.7, seed: 17 },
@@ -202,7 +205,8 @@ export const experimentPresets: ExperimentPreset[] = [
     activations: ["tanh", "tanh", "tanh"],
     init: "xavier",
     settings: { ...base, lr: 0.01, batch: 32, epochs: 3000 },
-    expectation: "학습 정확도는 높아지지만 검증 정확도는 낮게 남을 수 있습니다.",
+    expectation:
+      "학습 정확도는 높아지지만 검증 정확도는 낮게 남을 수 있습니다.",
   },
 ];
 /** Dataset kinds that the base engine does not provide. */
@@ -223,8 +227,8 @@ function customData(kind: string, count: number, noise: number, seed: number) {
     return {
       x: x + normal() * noise,
       y: y + normal() * noise,
-      label: ((Math.floor(x * 0.67 + 100) + Math.floor(y * 0.67 + 100)) %
-        2) as 0 | 1,
+      label: ((Math.floor(x * 0.67 + 100) + Math.floor(y * 0.67 + 100)) % 2) as
+        0 | 1,
     };
   });
 }

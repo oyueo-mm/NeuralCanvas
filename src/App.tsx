@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLab } from "./useLab";
-import { DataEditor } from "./Panels";
+import { DataEditor, DataFiles } from "./Panels";
 import { Home } from "./Home";
 import { LabPage } from "./LabPage";
-import { DataPage } from "./DataPage";
 import { PresetsPage } from "./PresetsPage";
 import { ResultsPage } from "./ResultsPage";
 import { NetworkPage } from "./NetworkPage";
@@ -42,6 +41,13 @@ export default function App() {
   useEffect(() => {
     if (!compact) setNavOpen(false);
   }, [compact]);
+  // The page behind the drawer is inert, so focus returns once the drawer has closed.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !navOpen)
+      menuToggle.current?.focus({ preventScroll: true });
+    wasOpen.current = navOpen;
+  }, [navOpen]);
   useEffect(() => {
     if (!l.message) {
       setToast(false);
@@ -59,7 +65,6 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || panel || menu) return;
       setNavOpen(false);
-      menuToggle.current?.focus({ preventScroll: true });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -99,8 +104,7 @@ export default function App() {
     return () => viewport?.removeEventListener("resize", update);
   }, []);
   // Hidden pages keep their state but stop re-rendering with every training update.
-  const lab = useWhileActive(l, page === "lab"),
-    data = useWhileActive(l, page === "data"),
+  const lab = useWhileActive(l, page === "lab" || page === "data"),
     network = useWhileActive(l, page === "network"),
     results = useWhileActive(l, page === "results"),
     presets = useWhileActive(l, page === "presets");
@@ -136,6 +140,7 @@ export default function App() {
     className: `page page-${id}`,
     "data-page": id,
   });
+  const stage = page === "data" ? "data" : "lab";
   return (
     <div
       className={`app-shell task-${l.task} ${collapsed && !compact ? "nav-collapsed" : ""}`}
@@ -162,10 +167,7 @@ export default function App() {
         toggle={() => setCollapsed(!collapsed)}
         compact={compact}
         open={navOpen}
-        close={() => {
-          setNavOpen(false);
-          menuToggle.current?.focus({ preventScroll: true });
-        }}
+        close={() => setNavOpen(false)}
       />
       <div className="workspace" inert={compact && navOpen}>
         <header className="topbar">
@@ -265,19 +267,19 @@ export default function App() {
               <Home onStart={() => go("lab")} onPresets={() => go("presets")} />
             </div>
           )}
-          <div {...pane("lab")}>
+          <div
+            hidden={page !== "lab" && page !== "data"}
+            className={`page page-${stage}`}
+            data-page={stage}
+          >
             <LabPage
+              page={stage}
               lab={lab}
               edit={openData}
               onReset={askReset}
               onResults={toResults}
             />
           </div>
-          {seen.has("data") && (
-            <div {...pane("data")}>
-              <DataPage lab={data} />
-            </div>
-          )}
           {seen.has("presets") && (
             <div {...pane("presets")}>
               <PresetsPage lab={presets} onApplied={toLab} />
@@ -308,7 +310,10 @@ export default function App() {
           returnFocus={opener.current}
         >
           {panel === "data" ? (
-            <DataEditor lab={l} />
+            <>
+              <DataEditor lab={l} />
+              <DataFiles lab={l} />
+            </>
           ) : (
             <>
               <p>가중치와 학습 이력을 초기화합니다.</p>

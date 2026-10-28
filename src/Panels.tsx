@@ -695,7 +695,7 @@ export function ObservationPanel({ lab: l }: { lab: Lab }) {
           {classification ? (
             <>
               C{Number(l.f.y >= 0.5)}{" "}
-              <strong data-testid="probability">
+              <strong data-testid="probe-probability">
                 {((l.f.y >= 0.5 ? l.f.y : 1 - l.f.y) * 100).toFixed(1)}%
               </strong>
             </>
