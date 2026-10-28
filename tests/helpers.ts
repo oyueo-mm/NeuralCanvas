@@ -30,10 +30,13 @@ export async function closeDialog(page: Page) {
 /** Navigates with the left menu (an overlay drawer on narrow screens). */
 export async function goPage(page: Page, id: PageId) {
   if (isCompact(page)) {
-    const open = page.getByRole("button", { name: "메뉴 열기", exact: true });
+    const open = page.getByRole("button", { name: "메뉴 열기", exact: true }),
+      nav = page.locator("#nav");
+    // The layout switches after a resize; wait for it instead of sampling once.
+    await expect(open.or(nav).first()).toBeVisible();
     if (await open.isVisible()) {
       await open.click();
-      await expect(page.locator("#nav")).toBeVisible();
+      await expect(nav).toBeVisible();
       await page.waitForTimeout(300);
     }
   }
