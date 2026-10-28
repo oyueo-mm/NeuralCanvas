@@ -29,12 +29,12 @@ type Props = {
   classDefinitions: ClassDefinition[];
   setActiveClass: (c: 0 | 1) => void;
   resolution: number;
-  setResolution: (n: number) => void;
   observe: (x: number, y: number) => void;
   change: (p: Point[]) => void;
   selected: number | null;
   select: (i: number | null) => void;
-  edit: () => void;
+  /** Opens the data editor; pages that edit inline omit it. */
+  edit?: () => void;
   validationIndices: Set<number>;
 };
 // Plot margins leave room for tick labels without wasting canvas.
@@ -69,7 +69,6 @@ export const Plot = memo(function Plot({
   classDefinitions: classes,
   setActiveClass,
   resolution,
-  setResolution,
   observe,
   change,
   selected,
@@ -320,7 +319,7 @@ export const Plot = memo(function Plot({
         select(g.point);
         if (classification) observe(data[g.point].x, data[g.point].y);
         svg.current?.focus({ preventScroll: true });
-        edit();
+        edit?.();
       } else if (!g.moved && data.length < 2000) {
         const p = math(local(e));
         change([
@@ -378,19 +377,6 @@ export const Plot = memo(function Plot({
                 </button>
               ))}
             </div>
-            <select
-              className="resolution-select"
-              aria-label="결정 경계 해상도"
-              title="결정 경계 해상도"
-              value={resolution}
-              onChange={(e) => setResolution(+e.target.value)}
-            >
-              {[24, 48, 72, 96].map((n) => (
-                <option key={n} value={n}>
-                  {n} × {n}
-                </option>
-              ))}
-            </select>
           </>
         )}
         <span className="count" aria-label="데이터 개수">
@@ -424,17 +410,19 @@ export const Plot = memo(function Plot({
           >
             <Icon name="fit" />
           </button>
-          <button
-            className="tool edit-data"
-            aria-label="데이터 편집"
-            title="데이터 편집"
-            onClick={edit}
-            onPointerUp={(e) => {
-              if (e.pointerType === "touch") edit();
-            }}
-          >
-            <Icon name="edit" />
-          </button>
+          {edit && (
+            <button
+              className="tool edit-data"
+              aria-label="데이터 편집"
+              title="데이터 편집"
+              onClick={edit}
+              onPointerUp={(e) => {
+                if (e.pointerType === "touch") edit();
+              }}
+            >
+              <Icon name="edit" />
+            </button>
+          )}
         </div>
       </div>
       <div ref={ref} className="scene">

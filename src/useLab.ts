@@ -19,7 +19,7 @@ import {
   type Task,
   type ClassDefinition,
 } from "./engine";
-import type { Selection } from "./Network";
+import type { Selection } from "./NetworkView";
 import { themedClasses } from "./theme";
 import { loadExperiment, type Experiment, type RecordItem } from "./storage";
 import type { Request } from "./worker";
@@ -57,7 +57,8 @@ export function useLab() {
     [name, setName] = useState("나의 첫 번째 신경망"),
     [tab, setTab] = useState("data"),
     [mode, setModeState] = useState<Mode>("normal"),
-    [rate, setRate] = useState(noRate);
+    [rate, setRate] = useState(noRate),
+    [dataSeed, setDataSeed] = useState(defaults.seed);
   const worker = useRef<Worker | null>(null),
     revision = useRef(0),
     direction = useRef(1),
@@ -286,6 +287,7 @@ export function useLab() {
     setStep(e.history.at(-1)?.step ?? 0);
     setInput(e.input);
     setInput2(e.input2 ?? 0);
+    setDataSeed(e.settings.seed);
     setClassDefinitions(
       classes.map((c) => ({
         ...c,
@@ -363,6 +365,7 @@ export function useLab() {
     applyExperiment(presetExperiment(p));
     setPreset(p.data.kind);
     setCount(p.data.count);
+    setDataSeed(p.data.seed);
     setNoise(p.data.noise);
     setActiveClass(0);
     setMessage("");
@@ -542,6 +545,8 @@ export function useLab() {
     resize,
     mutate,
     train,
+    dataSeed,
+    setDataSeed,
     mode,
     setMode,
     rate,
