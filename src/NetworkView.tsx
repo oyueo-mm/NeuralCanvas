@@ -238,7 +238,8 @@ export const NetworkView = memo(function NetworkView({
       width: chosen ? 3.6 : (0.7 + 2.6 * strength) * (related ? 1.4 : 1),
     };
   };
-  const showText = scale >= 0.55;
+  const showText = scale >= 0.4,
+    labelSize = Math.min(14, Math.max(11, 9.5 / scale));
   return (
     <section className="network-view" aria-label="신경망">
       <div className="network-toolbar" role="toolbar" aria-label="신경망 도구">
@@ -389,7 +390,7 @@ export const NetworkView = memo(function NetworkView({
                   y={padY - 38}
                   textAnchor="middle"
                   fill={palette.muted}
-                  fontSize="13"
+                  fontSize={Math.max(13, 12 / scale)}
                   fontWeight="600"
                 >
                   {l === 0
@@ -483,7 +484,9 @@ export const NetworkView = memo(function NetworkView({
                         x={p.x}
                         y={p.y + 4}
                         fill={palette.ink}
-                        fontSize={label.length > 4 ? 9 : 11}
+                        fontSize={
+                          label.length > 4 ? labelSize * 0.82 : labelSize
+                        }
                         textAnchor="middle"
                         fontFamily="ui-monospace,monospace"
                         pointerEvents="none"
@@ -498,7 +501,7 @@ export const NetworkView = memo(function NetworkView({
                   x={pos(l, 0).x}
                   y={worldH - padY + 44}
                   fill={palette.muted}
-                  fontSize="12"
+                  fontSize={Math.max(12, 11 / scale)}
                   textAnchor="middle"
                 >
                   {l === 0

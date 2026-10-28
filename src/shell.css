@@ -846,3 +846,15 @@
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }
+.inline-field span {
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .network-toolbar .inline-field span {
+    display: none;
+  }
+  .network-toolbar .inline-field select {
+    width: 104px;
+    min-height: 36px;
+  }
+}
