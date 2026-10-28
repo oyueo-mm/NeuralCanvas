@@ -2,6 +2,100 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 export const format = (n: number, digits = 5) =>
   Number.isFinite(n) ? Number(n.toPrecision(digits)).toString() : "—";
+/** State mirrored to localStorage; storage failures fall back to plain state. */
+export function usePersisted<T>(key: string, initial: T) {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored === null ? initial : (JSON.parse(stored) as T);
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* Storage may be unavailable. */
+    }
+  }, [key, value]);
+  return [value, setValue] as const;
+}
+/** Keeps showing the last value while a hidden page should not re-render with training updates. */
+export function useWhileActive<T>(value: T, active: boolean) {
+  const last = useRef(value);
+  if (active) last.current = value;
+  return last.current;
+}
+/** A toolbar popover that closes on outside pointer, Escape and focus loss to the page. */
+export function Popover({
+  label,
+  icon,
+  title,
+  children,
+  className = "",
+  text,
+}: {
+  label: string;
+  icon: string;
+  title?: string;
+  children: ReactNode;
+  className?: string;
+  text?: string;
+}) {
+  const [open, setOpen] = useState(false),
+    box = useRef<HTMLDivElement>(null),
+    button = useRef<HTMLButtonElement>(null),
+    id = useId();
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!box.current?.contains(t) && !button.current?.contains(t))
+        setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        button.current?.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener("pointerdown", down);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", down);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+  return (
+    <div className={`popover-wrap ${className}`}>
+      <button
+        ref={button}
+        className="tb-button"
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-controls={open ? id : undefined}
+        title={title ?? label}
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name={icon} />
+        {text && <span>{text}</span>}
+      </button>
+      {open && (
+        <div
+          ref={box}
+          id={id}
+          className="popover"
+          role="group"
+          aria-label={label}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 export function useCompact() {
   const [compact, setCompact] = useState(
     () => matchMedia("(max-width:900px)").matches,
@@ -145,6 +239,49 @@ export function Drawer({
 }
 export function Icon({ name }: { name: string }) {
   const paths: Record<string, ReactNode> = {
+    home: (
+      <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z" />
+    ),
+    lab: (
+      <>
+        <path d="M10 2v7.5L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9.5V2" />
+        <path d="M8.5 2h7M7 16h10" />
+      </>
+    ),
+    presets: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+      </>
+    ),
+    bolt: <path d="M13 2 3 14h9l-1 8 10-12h-9Z" />,
+    eye: (
+      <>
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+    menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+    panelLeft: (
+      <>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M9 3v18" />
+      </>
+    ),
+    panelRight: (
+      <>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M15 3v18" />
+      </>
+    ),
+    link: (
+      <>
+        <path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7" />
+        <path d="M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" />
+      </>
+    ),
     play: <path d="m8 5 11 7-11 7Z" />,
     pause: (
       <>

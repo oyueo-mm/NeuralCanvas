@@ -19,10 +19,14 @@ import {
   type Task,
   type ClassDefinition,
 } from "./engine";
-import type { Selection } from "./Network";
+import type { Selection } from "./NetworkView";
 import { themedClasses } from "./theme";
 import { loadExperiment, type Experiment, type RecordItem } from "./storage";
 import type { Request } from "./worker";
+import type { Mode, Rate } from "./runner";
+import { appendHistory } from "./history";
+import { presetExperiment, type ExperimentPreset } from "./presets";
+const noRate: Rate = { batchesPerSec: 0, epochsPerSec: 0 };
 export function useLab() {
   const [model, setModel] = useState(() => createModel()),
     [data, setData] = useState<Point[]>(() => dataset("사인")),
@@ -51,7 +55,10 @@ export function useLab() {
     [undo, setUndo] = useState<Point[][]>([]),
     [redo, setRedo] = useState<Point[][]>([]),
     [name, setName] = useState("나의 첫 번째 신경망"),
-    [tab, setTab] = useState("data");
+    [tab, setTab] = useState("data"),
+    [mode, setModeState] = useState<Mode>("normal"),
+    [rate, setRate] = useState(noRate),
+    [dataSeed, setDataSeed] = useState(defaults.seed);
   const worker = useRef<Worker | null>(null),
     revision = useRef(0),
     direction = useRef(1),
@@ -96,6 +103,7 @@ export function useLab() {
     worker.current?.terminate();
     worker.current = null;
     setRunning(false);
+    setRate(noRate);
   }, []);
   const invalidate = useCallback(
     (text = "") => {
@@ -160,9 +168,9 @@ export function useLab() {
         setStep(r.step);
         setGradient(r.gradient);
         setRunning(r.running);
+        setRate(r.rate);
       }
-      if (r.type === "history")
-        setHistory((h) => [...h, ...r.records].slice(-1000));
+      if (r.type === "history") setHistory((h) => appendHistory(h, r.records));
       if (r.type === "error") {
         stopWorker();
         setMessage(r.message);
@@ -180,6 +188,7 @@ export function useLab() {
       settings,
       epoch,
       step,
+      mode,
     } satisfies Request);
     return w;
   }
@@ -194,10 +203,36 @@ export function useLab() {
     }
     setPlaying(false);
     const w = ensureWorker();
-    w.postMessage({ type, revision: revision.current } satisfies Request);
+    w.postMessage(
+      type === "run"
+        ? ({
+            type,
+            revision: revision.current,
+            mode,
+            speed: settings.speed,
+          } satisfies Request)
+        : ({ type, revision: revision.current } satisfies Request),
+    );
     setRunning(type === "run");
     setMessage("");
   }
+  /** Live speed and mode changes reach the running worker without touching weights or Adam. */
+  const setSpeed = (speed: number) => {
+    setSettings((s) => ({ ...s, speed }));
+    worker.current?.postMessage({
+      type: "speed",
+      speed,
+      revision: revision.current,
+    } satisfies Request);
+  };
+  const setMode = (next: Mode) => {
+    setModeState(next);
+    worker.current?.postMessage({
+      type: "mode",
+      mode: next,
+      revision: revision.current,
+    } satisfies Request);
+  };
   const experiment = (includeOther = true): Experiment => ({
     version: 2,
     task,
@@ -251,6 +286,7 @@ export function useLab() {
     setStep(e.history.at(-1)?.step ?? 0);
     setInput(e.input);
     setInput2(e.input2 ?? 0);
+    setDataSeed(e.settings.seed);
     setClassDefinitions(
       classes.map((c) => ({
         ...c,
@@ -277,8 +313,7 @@ export function useLab() {
         activeClass: 0,
       };
   }
-  function switchTask(next: Task) {
-    if (next === task) return;
+  const stash = () => {
     modes.current[task] = {
       experiment: experiment(false),
       undo,
@@ -288,6 +323,10 @@ export function useLab() {
       noise,
       activeClass,
     };
+  };
+  function switchTask(next: Task) {
+    if (next === task) return;
+    stash();
     const cached = modes.current[next];
     const e: Experiment = cached?.experiment ?? {
       version: 2,
@@ -317,6 +356,17 @@ export function useLab() {
     setCount(cached?.count ?? (next === "classification" ? 100 : 50));
     setNoise(cached?.noise ?? (next === "classification" ? 0.12 : 0));
     setActiveClass(cached?.activeClass ?? 0);
+    setMessage("");
+  }
+  /** Replaces data, model and settings with a preset; the other task's experiment stays cached. */
+  function applyPreset(p: ExperimentPreset) {
+    if (p.task !== task) stash();
+    applyExperiment(presetExperiment(p));
+    setPreset(p.data.kind);
+    setCount(p.data.count);
+    setDataSeed(p.data.seed);
+    setNoise(p.data.noise);
+    setActiveClass(0);
     setMessage("");
   }
   useEffect(() => {
@@ -494,6 +544,13 @@ export function useLab() {
     resize,
     mutate,
     train,
+    dataSeed,
+    setDataSeed,
+    mode,
+    setMode,
+    rate,
+    setSpeed,
+    applyPreset,
     experiment,
     resetModel,
     applyExperiment,

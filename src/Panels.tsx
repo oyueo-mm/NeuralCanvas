@@ -14,8 +14,8 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
   const classes = l.classDefinitions;
   const makeData = (kind: string) =>
     l.task === "classification"
-      ? classificationDataset(kind, l.count, l.noise, l.settings.seed)
-      : dataset(kind, l.count, l.noise, l.settings.seed);
+      ? classificationDataset(kind, l.count, l.noise, l.dataSeed)
+      : dataset(kind, l.count, l.noise, l.dataSeed);
   return (
     <>
       <div className="button-row">
@@ -173,6 +173,14 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
           max={3}
           onChange={l.setNoise}
         />
+        <NumberField
+          label="데이터 시드"
+          value={l.dataSeed}
+          min={0}
+          max={4294967295}
+          step={1}
+          onChange={l.setDataSeed}
+        />
       </div>
       <button className="wide" onClick={() => l.changeData(makeData(l.preset))}>
         프리셋 다시 생성
@@ -188,6 +196,47 @@ export function DataEditor({ lab: l }: { lab: Lab }) {
         전체 삭제
       </button>
     </>
+  );
+}
+export function DataFiles({ lab: l }: { lab: Lab }) {
+  const classification = l.task === "classification";
+  return (
+    <div className="file-group">
+      <span className="section-label">파일</span>
+      <div className="button-row">
+        <button onClick={() => l.datasetFile.current?.click()}>
+          CSV / JSON 가져오기
+        </button>
+        <button
+          onClick={() =>
+            download(
+              "dataset.csv",
+              (classification ? "x,y,label\n" : "x,y\n") +
+                l.data
+                  .map(
+                    (p) =>
+                      `${p.x},${p.y}${classification ? `,${p.label}` : ""}`,
+                  )
+                  .join("\n"),
+              "text/csv",
+            )
+          }
+        >
+          CSV 내보내기
+        </button>
+        <button
+          onClick={() =>
+            download(
+              "dataset.json",
+              JSON.stringify(l.data, null, 2),
+              "application/json",
+            )
+          }
+        >
+          JSON 내보내기
+        </button>
+      </div>
+    </div>
   );
 }
 export function ModelEditor({ lab: l }: { lab: Lab }) {
@@ -576,19 +625,6 @@ export function TrainingSettings({ lab: l }: { lab: Lab }) {
           onChange={(e) => change("lr", 10 ** +e.target.value)}
         />
       </div>
-      <div className="slider-label">
-        <span title="한 번에 처리하는 배치 수">
-          학습 속도 <b>{l.settings.speed}</b>
-        </span>
-        <input
-          aria-label="학습 속도"
-          type="range"
-          min="1"
-          max="100"
-          value={l.settings.speed}
-          onChange={(e) => change("speed", +e.target.value)}
-        />
-      </div>
       <details className="advanced">
         <summary>고급</summary>
         <div className="form-grid">
@@ -659,7 +695,7 @@ export function ObservationPanel({ lab: l }: { lab: Lab }) {
           {classification ? (
             <>
               C{Number(l.f.y >= 0.5)}{" "}
-              <strong data-testid="probability">
+              <strong data-testid="probe-probability">
                 {((l.f.y >= 0.5 ? l.f.y : 1 - l.f.y) * 100).toFixed(1)}%
               </strong>
             </>
