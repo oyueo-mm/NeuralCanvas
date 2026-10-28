@@ -476,7 +476,7 @@ export const Plot = memo(function Plot({
               <rect x={padL} y={padT} width={iw} height={ih} />
             </clipPath>
           </defs>
-          <rect width={W} height={H} fill={palette.paper} />
+          <rect width={W} height={H} fill={palette.white} />
           {classification && visibleBoundary && (
             <image
               pointerEvents="none"
@@ -638,7 +638,7 @@ export const Plot = memo(function Plot({
               cy={sy(classification ? input2 : forward(model, input).y)}
               r={radius + 1.5}
               fill={palette.ink}
-              stroke={palette.ivory}
+              stroke={palette.white}
               strokeWidth="2"
             />
           </g>

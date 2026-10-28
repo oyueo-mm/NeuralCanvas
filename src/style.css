@@ -8,14 +8,13 @@
   font-synthesis: none;
   color-scheme: light;
   /* Palette */
-  --ivory: #fdfaf4;
+  --white: #ffffff;
   --pink: #f1e3e9;
   --sage-100: #beceb5;
   --sage: #8ca185;
   --sage-deep: #4b674e;
   --ink: #29372d;
-  /* Derived tints and text colors (all checked against --ivory for contrast) */
-  --paper: #fffefb;
+  /* Derived tints and text colors (all checked against --white for contrast) */
   --tint: #f3f5ec;
   --tint-2: #e4e8db;
   --line: #d9dfcd;
@@ -26,7 +25,7 @@
   --header-h: 48px;
   --sb-w: 380px;
   color: var(--ink);
-  background: var(--ivory);
+  background: var(--white);
 }
 * {
   box-sizing: border-box;
@@ -39,7 +38,7 @@ body,
 body {
   margin: 0;
   overflow: hidden;
-  background: var(--ivory);
+  background: var(--white);
 }
 button,
 input,
@@ -100,7 +99,7 @@ button {
   padding: 6px 12px;
   border: 1px solid var(--sage-100);
   border-radius: 8px;
-  background: var(--paper);
+  background: var(--white);
   color: var(--ink);
   font-size: 13px;
   font-weight: 550;
@@ -140,7 +139,7 @@ svg:focus-visible {
 .primary {
   background: var(--sage-deep);
   border-color: var(--sage-deep);
-  color: var(--ivory);
+  color: var(--white);
 }
 .primary:hover:not(:disabled) {
   background: #3d563f;
@@ -170,7 +169,7 @@ svg:focus-visible {
 .sidebar-toggle[aria-expanded="true"] {
   background: var(--sage-deep);
   border-color: var(--sage-deep);
-  color: var(--ivory);
+  color: var(--white);
 }
 .tool[aria-pressed="true"]:hover:not(:disabled),
 .sidebar-toggle[aria-expanded="true"]:hover:not(:disabled) {
@@ -206,7 +205,7 @@ select {
   min-height: 36px;
   border: 1px solid var(--sage);
   border-radius: 7px;
-  background: var(--paper);
+  background: var(--white);
   color: var(--ink);
   padding: 6px 9px;
   font-size: 13px;
@@ -237,7 +236,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   background: var(--sage-deep);
-  border: 3px solid var(--ivory);
+  border: 3px solid var(--white);
   border-radius: 50%;
   margin-top: -7px;
   box-shadow: 0 0 0 1px var(--sage-deep);
@@ -246,7 +245,7 @@ input[type="range"]::-moz-range-thumb {
   width: 12px;
   height: 12px;
   background: var(--sage-deep);
-  border: 3px solid var(--ivory);
+  border: 3px solid var(--white);
   border-radius: 50%;
   box-shadow: 0 0 0 1px var(--sage-deep);
 }
@@ -330,7 +329,7 @@ details[open] > summary {
   align-items: center;
   gap: 14px;
   padding: 0 10px 0 14px;
-  background: var(--ivory);
+  background: var(--white);
   border-bottom: 1px solid var(--line);
   min-width: 0;
 }
@@ -347,7 +346,7 @@ details[open] > summary {
   height: 30px;
   border-radius: 8px;
   background: var(--sage-deep);
-  color: var(--ivory);
+  color: var(--white);
 }
 .brand-mark svg {
   width: 20px;
@@ -377,7 +376,7 @@ details[open] > summary {
 }
 .segmented button[aria-pressed="true"] {
   background: var(--sage-deep);
-  color: var(--ivory);
+  color: var(--white);
 }
 .header-actions {
   margin-left: auto;
@@ -424,7 +423,7 @@ details[open] > summary {
   display: grid;
   gap: 6px;
   padding: 10px;
-  background: var(--paper);
+  background: var(--white);
   border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 6px 18px rgba(41, 55, 45, 0.12);
@@ -468,7 +467,7 @@ details[open] > summary {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--paper);
+  background: var(--white);
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
@@ -482,7 +481,7 @@ details[open] > summary {
   padding: 4px 8px;
   border-bottom: 1px solid var(--line);
   min-height: 42px;
-  background: var(--paper);
+  background: var(--white);
 }
 .tool-group {
   display: flex;
@@ -681,7 +680,7 @@ details[open] > summary {
   padding: 7px 16px;
   border-radius: 999px;
   background: var(--ink);
-  color: var(--ivory);
+  color: var(--white);
   font-size: 13px;
   line-height: 1.4;
   text-align: center;
@@ -705,7 +704,7 @@ details[open] > summary {
   min-height: 0;
   overflow: hidden;
   border-left: 1px solid var(--line);
-  background: var(--ivory);
+  background: var(--white);
 }
 .sidebar-closed .sidebar {
   visibility: hidden;
@@ -727,7 +726,7 @@ details[open] > summary {
 }
 .side-section {
   margin-bottom: 8px;
-  background: var(--paper);
+  background: var(--white);
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
@@ -789,7 +788,7 @@ details[open] > summary {
   position: absolute;
   inset: 0;
   display: flex;
-  background: var(--paper);
+  background: var(--white);
 }
 .network-box.expanded {
   position: fixed;
@@ -914,7 +913,7 @@ details[open] > summary {
   left: 2px;
   top: 2px;
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--white);
   border: 1px solid var(--sage-deep);
   transition: left 0.12s;
 }
@@ -1077,7 +1076,7 @@ details[open] > summary {
   margin: 0;
   border: 0;
   border-left: 1px solid var(--line);
-  background: var(--ivory);
+  background: var(--white);
   color: var(--ink);
   padding: 0;
   box-shadow: -6px 0 20px rgba(41, 55, 45, 0.12);

@@ -228,7 +228,7 @@ export const Network = memo(function Network({
           <rect
             width={W}
             height={H}
-            fill={palette.paper}
+            fill={palette.white}
             pointerEvents="none"
           />
           <g

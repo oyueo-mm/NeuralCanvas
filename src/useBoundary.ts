@@ -62,7 +62,7 @@ export function useBoundary(
         const colors = latest.classes.map((c) =>
           [1, 3, 5].map(
             (k, i) =>
-              [253, 250, 244][i] * 0.7 +
+              [255, 255, 255][i] * 0.7 +
               parseInt(c.color.slice(k, k + 2), 16) * 0.3,
           ),
         );

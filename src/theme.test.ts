@@ -17,18 +17,17 @@ const tint2 = "#E4E8DB",
   muted = "#536257";
 describe("palette accessibility", () => {
   it.each([
-    ["body text on ivory", palette.ink, palette.ivory],
+    ["body text on white", palette.ink, palette.white],
     ["body text on section header", palette.ink, tint2],
-    ["secondary text on ivory", muted, palette.ivory],
-    ["secondary text on paper", muted, palette.paper],
+    ["secondary text on white", muted, palette.white],
     ["secondary text on section header", muted, tint2],
-    ["primary button label", palette.ivory, palette.sageDeep],
-    ["selected tool label", palette.ivory, palette.sageDeep],
+    ["primary button label", palette.white, palette.sageDeep],
+    ["selected tool label", palette.white, palette.sageDeep],
     ["ink on pink selection", palette.ink, palette.pink],
-    ["link on ivory", palette.sageDeep, palette.ivory],
+    ["link on white", palette.sageDeep, palette.white],
     ["link on hover tint", palette.sageDeep, tint],
-    ["validation accent text", palette.rose, palette.paper],
-    ["toast text", palette.ivory, palette.ink],
+    ["validation accent text", palette.rose, palette.white],
+    ["toast text", palette.white, palette.ink],
   ])("%s keeps WCAG AA text contrast", (_, fg, bg) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
   });
@@ -39,7 +38,7 @@ describe("palette accessibility", () => {
     ["boundary contour", palette.ink],
     ["class 0 fill", themedClasses[0].color],
   ])("%s is distinguishable on the graph surface", (_, color) => {
-    expect(contrast(color, palette.paper)).toBeGreaterThanOrEqual(3);
+    expect(contrast(color, palette.white)).toBeGreaterThanOrEqual(3);
   });
   it("the two classes differ in lightness, not only in hue", () => {
     expect(
