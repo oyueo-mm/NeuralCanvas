@@ -1,3 +1,4 @@
+import { Runner, type Command, type Mode, type Outgoing } from "./runner";
 import { Trainer } from "./training";
 import type { Model, Point, Settings } from "./engine";
 export type Request =
@@ -9,63 +10,30 @@ export type Request =
       settings: Settings;
       epoch: number;
       step: number;
+      mode: Mode;
     }
-  | { type: "run" | "pause" | "step" | "epoch"; revision: number };
-let trainer: Trainer,
-  revision = 0,
-  running = false,
-  timer: ReturnType<typeof setTimeout> | undefined;
-function send() {
-  postMessage({
-    type: "snapshot",
-    revision,
-    model: trainer.model,
-    epoch: trainer.epoch,
-    step: trainer.step,
-    gradient: trainer.lastGradient,
-    running,
-  });
-}
-function work(mode: "run" | "step" | "epoch", target = trainer.epoch + 1) {
-  try {
-    const start = performance.now();
-    const records = [];
-    do {
-      records.push(trainer.batch());
-      if (mode === "step") break;
-      if (mode === "epoch" && trainer.epoch >= target) break;
-    } while (
-      performance.now() - start < 16 &&
-      (mode === "epoch" || records.length < trainer.settings.speed) &&
-      trainer.epoch < trainer.settings.epochs
-    );
-    if (trainer.epoch >= trainer.settings.epochs) running = false;
-    postMessage({ type: "history", revision, records });
-    send();
-    if (running) timer = setTimeout(() => work("run"), 32);
-    else if (mode === "epoch" && trainer.epoch < target)
-      timer = setTimeout(() => work("epoch", target), 0);
-  } catch (e) {
-    running = false;
-    postMessage({ type: "error", revision, message: String(e) });
-    send();
-  }
-}
+  | (Command & { revision: number });
+let runner: Runner | undefined,
+  revision = 0;
+const clock = {
+  now: () => performance.now(),
+  after: (ms: number, fn: () => void) => setTimeout(fn, ms),
+  cancel: (handle: unknown) =>
+    clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+const out = (message: Outgoing) => postMessage({ ...message, revision });
 onmessage = (event: MessageEvent<Request>) => {
   const r = event.data;
   if (r.type === "init") {
-    clearTimeout(timer);
+    runner?.dispose();
     revision = r.revision;
-    running = false;
-    trainer = new Trainer(r.model, r.data, r.settings);
+    const trainer = new Trainer(r.model, r.data, r.settings);
     trainer.epoch = r.epoch;
     trainer.step = r.step;
-    send();
+    runner = new Runner(trainer, out, clock, { mode: r.mode });
+    runner.snapshot();
     return;
   }
-  if (r.revision !== revision || !trainer) return;
-  clearTimeout(timer);
-  running = r.type === "run";
-  if (r.type === "pause") send();
-  else work(r.type);
+  if (r.revision !== revision || !runner) return;
+  runner.command(r);
 };

@@ -33,7 +33,8 @@ export class Trainer {
     this.validation = shuffled.slice(0, n);
     this.train = shuffled.slice(n);
   }
-  batch() {
+  /** One optimizer update. Turbo training calls this repeatedly and reads metrics() only occasionally. */
+  advance() {
     if (!this.train.length) throw Error("학습 데이터가 없습니다.");
     if (this.cursor >= this.order.length) {
       this.order = shuffle(this.train, this.random);
@@ -48,6 +49,9 @@ export class Trainer {
     this.cursor += batch.length;
     this.step++;
     if (this.cursor >= this.order.length) this.epoch++;
+  }
+  /** Losses and accuracies of the current weights; throws when training diverged. */
+  metrics() {
     const train = loss(this.model, this.train),
       validation = this.validation.length
         ? loss(this.model, this.validation)
@@ -68,5 +72,9 @@ export class Trainer {
           }
         : {}),
     };
+  }
+  batch() {
+    this.advance();
+    return this.metrics();
   }
 }
