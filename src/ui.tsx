@@ -10,6 +10,7 @@ export function useCompact() {
     const query = matchMedia("(max-width:900px)"),
       update = () => setCompact(query.matches);
     query.addEventListener("change", update);
+    update();
     return () => query.removeEventListener("change", update);
   }, []);
   return compact;

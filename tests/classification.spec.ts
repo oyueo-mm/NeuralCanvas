@@ -126,6 +126,9 @@ test("classification drawing, training, boundary, inspectors and mode persistenc
         await page.getByTestId("decision-boundary").getAttribute("href"),
     )
     .not.toBe(initial);
+  await expect
+    .poll(async () => (await saved(page)).history?.length ?? 0)
+    .toBeGreaterThan(1);
   state = await saved(page);
   expect(state.history.at(-1).train).toBeLessThan(state.history[0].train);
   expect(state.history.at(-1).validationAccuracy).toBeGreaterThanOrEqual(0);
