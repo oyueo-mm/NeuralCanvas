@@ -33,7 +33,9 @@ export async function goPage(page: Page, id: PageId) {
     const open = page.getByRole("button", { name: "메뉴 열기", exact: true }),
       nav = page.locator("#nav");
     // The layout switches after a resize; wait for it instead of sampling once.
-    await expect(open.or(nav).first()).toBeVisible();
+    await expect
+      .poll(async () => (await open.isVisible()) || (await nav.isVisible()))
+      .toBe(true);
     if (await open.isVisible()) {
       await open.click();
       await expect(nav).toBeVisible();
