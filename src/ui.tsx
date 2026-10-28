@@ -104,8 +104,13 @@ export function useCompact() {
     const query = matchMedia("(max-width:900px)"),
       update = () => setCompact(query.matches);
     query.addEventListener("change", update);
+    // Some engines deliver the media query change late after a viewport resize.
+    window.addEventListener("resize", update);
     update();
-    return () => query.removeEventListener("change", update);
+    return () => {
+      query.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
   }, []);
   return compact;
 }

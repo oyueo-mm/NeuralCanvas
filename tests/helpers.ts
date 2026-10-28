@@ -74,7 +74,17 @@ export async function closeDataTools(page: Page) {
 }
 /** The network inspector is a panel on wide screens and a sheet on narrow ones. */
 export async function openInspector(page: Page) {
-  if (isCompact(page) && !(await page.getByRole("dialog").isVisible()))
-    await page.getByRole("button", { name: "신경망 편집 열기" }).click();
+  if (isCompact(page)) {
+    // Choosing a neuron opens the sheet a moment later; do not click behind it.
+    const shown = await page
+      .getByRole("dialog")
+      .waitFor({ state: "visible", timeout: 2000 })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (!shown)
+      await page.getByRole("button", { name: "신경망 편집 열기" }).click();
+  }
   await expect(page.getByLabel("편집 대상")).toBeVisible();
 }

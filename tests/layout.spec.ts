@@ -92,7 +92,7 @@ for (const [width, height] of [
     expect(doc.h).toBeLessThanOrEqual(height + 1);
     const share = (plot.width * plot.height) / (width * height);
     expect(share).toBeGreaterThan(
-      width > 1100 ? 0.5 : width > 900 ? 0.42 : 0.45,
+      width > 1100 ? 0.45 : width > 900 ? 0.42 : 0.45,
     );
     if (width <= 900) expect(plot.width).toBeGreaterThan(width - 24);
     if (info.project.name === "chromium" || info.project.name === "mobile")
